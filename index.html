@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="description" content="Atlas interactivo de One Piece: personajes, tripulaciones, frutas del Diablo, barcos, islas y sagas conectados, con datos de la One Piece Wiki en español." />
+  <title>One Piece Atlas</title>
+  <link rel="stylesheet" href="./assets/style-B6ffKAGZ.css">
+</head>
+<body>
+  <a class="skip" href="#view">Saltar al contenido</a>
+  <header class="top">
+    <a class="brand" href="#/" aria-label="One Piece Atlas, portada">
+      <svg viewBox="0 0 64 64" width="38" height="38" aria-hidden="true"><circle cx="32" cy="32" r="31" fill="#0e2a4f" stroke="#e8b84a" stroke-width="2"/><ellipse cx="32" cy="40" rx="27" ry="8" fill="#cd9628"/><path d="M14 38 C14 18 50 18 50 38 Z" fill="#f0c44c"/><rect x="14" y="31" width="36" height="5" fill="#d23c2c"/><ellipse cx="32" cy="40" rx="27" ry="8" fill="none" stroke="#a87414" stroke-width="1.5"/></svg>
+      <span><b>ONE PIECE</b><small>ATLAS DE FICHAS</small></span>
+    </a>
+    <button class="burger" id="burger" aria-label="Abrir menú" aria-expanded="false" aria-controls="tabs">☰</button>
+    <nav class="tabs" id="tabs" aria-label="Secciones">
+      <a href="#/quien" data-v="quien">Quién es quién</a>
+      <a href="#/sagas" data-v="sagas">Sagas</a>
+      <a href="#/lugares" data-v="lugares">Los lugares</a>
+      <a href="#/biblioteca" data-v="biblioteca">La biblioteca</a>
+      <a href="#/comparar" data-v="comparar">Comparar</a>
+      <a href="#/metodologia" data-v="metodologia">Metodología</a>
+    </nav>
+    <div class="search">
+      <span class="mag" aria-hidden="true">⌕</span>
+      <input id="q" type="search" placeholder="Buscar en las fichas…  ( / )" role="combobox" aria-expanded="false" aria-controls="results" aria-label="Buscar en las 7.509 fichas" autocomplete="off" />
+      <div id="results" class="results" role="listbox" hidden></div>
+    </div>
+  </header>
+  <div class="shell">
+    <main id="view" tabindex="-1"><p class="loading boot">Cargando…</p></main>
+    <aside id="panel" aria-label="Ficha" hidden>
+      <div class="panel-bar">
+        <button class="icon-btn" id="pb-back" aria-label="Ficha anterior" title="Atrás">←</button>
+        <button class="icon-btn" id="pb-fwd" aria-label="Ficha siguiente" title="Adelante">→</button>
+        <span class="spacer"></span>
+        <button class="icon-btn" id="pb-close" aria-label="Cerrar la ficha" title="Cerrar (Esc)">✕</button>
+      </div>
+      <div class="panel-body" id="panel-body"></div>
+    </aside>
+  </div>
+  <footer class="foot">Datos de <a href="https://onepiece.fandom.com/es/" target="_blank" rel="noopener">One Piece Wiki (Fandom)</a>, <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA</a> · proyecto no oficial · <a href="#/metodologia">cómo se hizo</a></footer>
+<script defer src="./assets/index-E_fsY9aT.js"></script>
+</body>
+</html>
