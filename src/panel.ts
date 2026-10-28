@@ -44,7 +44,7 @@ export function relationGroups(d: Detail, self = -1): { key: string; label: stri
   const groups = new Map<string, number[]>();
   for (const [r, j, dir] of d.rl) { const rel = IDX!.rels[r]!; if (rel === 'categorizado_en') continue; const k = `${rel}|${dir}`; (groups.get(k) ?? groups.set(k, []).get(k)!).push(rootOf(j)); }
   const order = (k: string) => { const [rel, dir] = k.split('|'); const o = REL_ORDER.indexOf(rel!); return (o < 0 ? 99 : o) * 2 + +dir!; };
-  return [...groups.keys()].sort((a, b) => order(a) - order(b)).map((k) => { const [rel, dir] = k.split('|'); return { key: k, rel: rel!, dir: +dir!, label: '', ids: [...new Set(groups.get(k)!)].sort((a, b) => impOf(b) - impOf(a)) }; }).map((g) => ({ ...g, label: relLabel(g.rel, g.dir, self, g.ids.length) }));
+  return [...groups.keys()].sort((a, b) => order(a) - order(b)).map((k) => { const [rel, dir] = k.split('|'); return { key: k, rel: rel!, dir: +dir!, label: '', ids: [...new Set(groups.get(k)!)].sort((a, b) => impOf(b) - impOf(a)) }; }).map((g) => ({ ...g, label: relLabel(g.rel, g.dir, self, g.ids.length, g.ids) }));
 }
 export const itemHtml = (j: number, cls = '') => `<li class="${cls}"><a class="ilink item" href="#/ficha/${encodeURIComponent(nameOf(j))}" data-i="${j}">${avatarHtml(j, 30)}<span class="nm">${esc(shownName(j))}</span><small>${esc(TYPE_LABEL[typeOf(j)] ?? '')}</small></a></li>`;
 function relations(d: Detail, self = -1): string {

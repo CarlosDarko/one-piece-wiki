@@ -229,9 +229,36 @@ const IGNORE_FIELDS = new Set(['fecha', 'recompensa', 'edad', 'epiteto', 'sangre
 const edgeSet = new Map();
 const addEdge = (s, t, rel) => { if (s && t && s !== t) edgeSet.set(`${s}|${t}|${rel}`, [s, t, rel]); };
 const idsByTitleKey = (title) => resolve(title);
+// parentescos del campo «Familia» de la infobox: «Nombre (Rol)» donde Rol es lo que ese personaje es respecto a la ficha actual
+const KIN_STATS = { tipados: 0, genericos: 0 };
+const toRoot = (id) => (id && id.includes('/') ? resolve(id.split('/')[0]) ?? id : id);
+function kinEdges(e, f) {
+  const items = f.value.split(new RegExp(' · |;')).map((x) => x.trim()).filter(Boolean);
+  const own = toRoot(e.id); const ownT = result.get(own)?.tipo;
+  items.forEach((it, k) => {
+    const m = it.match(new RegExp('^(.*?)\\s*(?:\\(([^)]*)\\))?\\s*$')); const name = (m?.[1] ?? it).trim(); const role = (m?.[2] ?? '').toLowerCase();
+    const t0 = resolve(name) ?? (f.hrefs.length === items.length ? resolve(f.hrefs[k]) : undefined); const t = toRoot(t0); if (!t || t === own) return;
+    const personas = ownT === 'personaje' && result.get(t)?.tipo === 'personaje';
+    const adop = /adoptiv|jurad/.test(role), dudoso = /supuest|posible|presunt|clon|amante|rumor/.test(role);
+    let rel = null, a = own, b = t; // a→b según la relación
+    if (personas && !dudoso) {
+      if (/^(padre|madre|progenitor)/.test(role)) { rel = adop ? 'progenitor_adoptivo_de' : 'progenitor_de'; a = t; b = own; }
+      else if (/^(hij[oa]|retoño)/.test(role)) { rel = adop ? 'progenitor_adoptivo_de' : 'progenitor_de'; a = own; b = t; }
+      else if (/herman[oa]|gemel/.test(role)) { rel = adop ? 'hermano_adoptivo_de' : 'hermano_de'; }
+      else if (/^abuel[oa]/.test(role)) { rel = 'abuelo_de'; a = t; b = own; }
+      else if (/^niet[oa]/.test(role)) { rel = 'abuelo_de'; a = own; b = t; }
+      else if (/^t[ií][oa]/.test(role)) { rel = 'tio_de'; a = t; b = own; }
+      else if (/^sobrin[oa]/.test(role)) { rel = 'tio_de'; a = own; b = t; }
+      else if (/espos[oa]|marido|c[oó]nyuge|prometid[oa]/.test(role)) { rel = 'conyuge_de'; }
+    }
+    if (rel) { addEdge(a, b, rel); KIN_STATS.tipados++; } else { addEdge(own, t, 'familiar_de'); KIN_STATS.genericos++; }
+  });
+}
+
 for (const e of ents.values()) {
   for (const f of e.fields) {
     if (IGNORE_FIELDS.has(f.k)) continue;
+    if (f.k === 'familia') { kinEdges(e, f); continue; }
     for (const h of f.hrefs) { const t = resolve(h); if (!t) continue;
       const r = REL[f.k]; if (r) (r[1] === 'out' ? addEdge(e.id, t, r[0]) : addEdge(t, e.id, r[0])); else addEdge(e.id, t, 'relacionado');
       if (/^(combatientes|poder)[12]$/.test(f.k)) addEdge(t, e.id, 'lado' + f.k.slice(-1)); // bando del combatiente, para derivar los enfrentamientos
@@ -243,7 +270,7 @@ for (const e of ents.values()) {
   for (const c of e.cats) { const m = c.match(/saga de (.+)$/i); if (m && result.get(e.id)?.tipo !== 'saga') addEdge(e.id, resolve('Saga de ' + m[1]), 'aparece_en'); }
 }
 // relaciones sacadas de las secciones del artículo («Familia», «Tripulación», «Aliados», «Enemigos»…): enlaces a otros personajes u organizaciones, siempre en los dos sentidos
-const SEC_REL = [[/^(familia|parientes|hermanos|padres|abuelos|hijos|linaje)$/i, 'familiar_de']]; // solo títulos exactos; el resto de vínculos se decide por el primer párrafo de cada personaje de «Relaciones»
+const SEC_REL = []; // la familia sale solo del campo «Familia» de la infobox (parentesco tipado): los títulos y párrafos daban falsos parientes
 const HEADFULL = new RegExp('^<h([2-4]) id="[^"]*">(.*?)<' + '/h[2-4]>');
 const HEAD = new RegExp('^<h([2-4]) id="[^"]*">([^<]*)<');
 let secEdges = 0;
@@ -256,7 +283,7 @@ for (const e of ents.values()) {
     for (const l of p.matchAll(/<a data-t="([^"]*)"/g)) { const t = resolve(l[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue; addEdge(own, t, cur); addEdge(t, own, cur); secEdges++; }
   }
 }
-console.log('relaciones desde secciones del artículo:', secEdges);
+console.log('relaciones desde secciones del artículo:', secEdges, '· parentescos tipados:', KIN_STATS.tipados, 'genéricos:', KIN_STATS.genericos);
 // sección «Relaciones» de personajes: cada subtítulo (h3/h4) es el nombre de otro personaje u organización; el tipo de vínculo sale de las palabras de su primer párrafo
 const KIN = /\b(herman[oa]s?|abuel[oa]|padre|madre|hij[oa]s?|nieto|nieta|t[ií]o|prim[oa]|sobrin[oa]|esposa|esposo|cuñad[oa])\b/i, FOE = /\b(enemig[oa]s?|archienemig[oa]|antagonista|némesis|nemesis)\b/i, ALLY = /\b(aliad[oa]s?|alianza)\b/i, FRIEND = /\b(amig[oa]s?)\b/i;
 const TAGS = new RegExp('<[^>]+>', 'g'); let relEdges = 0;
@@ -267,7 +294,7 @@ for (const e of ents.values()) {
     const m = p.match(HEADFULL); if (!m) continue; const lvl = +m[1], text = m[2].replace(TAGS, '').replace(/&amp;/g, '&').trim();
     if (lvl === 2) { inRel = /^relaciones/i.test(text); continue; } if (!inRel || lvl < 3) continue;
     const t = resolve(text.replace(/\([^)]*\)/g, '').trim()); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue;
-    const body0 = p.slice(m[0].length).replace(TAGS, ' ').replace(/\s+/g, ' ').trim(); const dot = body0.indexOf('. '); const body = body0.slice(0, dot > 40 ? Math.min(dot, 260) : 220); const rel = KIN.test(body) ? 'familiar_de' : FOE.test(body) ? 'enemigo_de' : ALLY.test(body) ? 'aliado_de' : FRIEND.test(body) ? 'amigo_de' : null; if (!rel) continue;
+    const body0 = p.slice(m[0].length).replace(TAGS, ' ').replace(/\s+/g, ' ').trim(); const dot = body0.indexOf('. '); const body = body0.slice(0, dot > 40 ? Math.min(dot, 260) : 220); const rel = FOE.test(body) ? 'enemigo_de' : ALLY.test(body) ? 'aliado_de' : FRIEND.test(body) ? 'amigo_de' : null; if (!rel) continue;
     addEdge(own, t, rel); addEdge(t, own, rel); relEdges++;
   }
 }
@@ -339,3 +366,5 @@ writeFileSync('data/tipado-dudoso.tsv', ['id\ttipo\tconf\tmotivo', ...[...result
 console.log(JSON.stringify(quality, null, 1));
 function relCountEvo() { return typed.filter((x) => x[2] === 'evoluciona_en').length; }
 emitWeb({ list, idx, result, typed, mentions, mentionedBy, resolve, catParents, redirects, TYPES, quality });
+
+try { (await import('node:child_process')).execFileSync(process.execPath, ['scripts/auditoria-familia.mjs'], { stdio: 'ignore' }); } catch { /* el informe es opcional */ }

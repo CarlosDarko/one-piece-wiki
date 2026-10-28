@@ -25,7 +25,7 @@ export function emitWeb({ list, idx, result, typed, mentions, mentionedBy, resol
   rmSync(OUT, { recursive: true, force: true }); mkdirSync(OUT + '/detail', { recursive: true }); mkdirSync(OUT + '/art', { recursive: true });
   const emit = (name, data) => writeFileSync(`${OUT}/${name}.js`, `__od(${JSON.stringify(name)},${JSON.stringify(data)});`);
   const typeIdx = Object.fromEntries(TYPES.map((t, i) => [t, i]));
-  const relNames = [...new Set([...typed.map((x) => x[2]), 'enfrenta_a', 'companero_de', 'enemigo_de', 'tripulacion_de', 'aliado_de', 'amigo_de', 'coincidido_con', 'mascota_de'])];
+  const relNames = [...new Set([...typed.map((x) => x[2]), 'enfrenta_a', 'companero_de', 'enemigo_de', 'tripulacion_de', 'aliado_de', 'amigo_de', 'coincidido_con', 'mascota_de', 'progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'abuelo_de', 'tio_de', 'conyuge_de'])];
   let edges = typed.filter((x) => idx.has(x[0]) && idx.has(x[1])).map(([s, t, r]) => [idx.get(s), idx.get(t), relNames.indexOf(r)]);
   const tipo = (i) => result.get(list[i].id).tipo;
   // ---- matriz de tipos por relación: descarta enlaces cuyo origen o destino no tiene sentido (p. ej. «doblado por» apuntando a una película)
@@ -36,7 +36,7 @@ export function emitWeb({ list, idx, result, typed, mentions, mentionedBy, resol
     primera_aparicion: [ANY, TS('capitulo', 'episodio', 'arco', 'saga', 'medio', 'volumen')], aparece_en: [ANY, TS('saga', 'arco', 'medio', 'capitulo', 'episodio', 'evento')],
     reside_en: [ANY, TS('lugar', 'naturaleza')], originario_de: [ANY, TS('lugar', 'naturaleza')], base_en: [ANY, TS('lugar', 'naturaleza')], en_region: [TS('lugar'), TS('lugar')],
     familiar_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], propiedad_de: [TS('personaje', 'organizacion'), TS('arma', 'objeto', 'barco', 'tecnica', 'animal')],
-    combatiente_en: [TS('personaje', 'organizacion', 'animal'), ANY], enfrenta_a: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], companero_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], tripulacion_de: [TS('personaje'), TS('personaje')], aliado_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], amigo_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], coincidido_con: [TS('personaje'), TS('personaje')], mascota_de: [TS('personaje'), TS('personaje')], enemigo_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], lado1: [TS('personaje', 'organizacion'), ANY], lado2: [TS('personaje', 'organizacion'), ANY], ocurre_en: [ANY, TS('lugar', 'naturaleza')], dirigido_por: [TS('organizacion', 'lugar'), TS('personaje')], de_nacion: [ANY, TS('lugar')],
+    combatiente_en: [TS('personaje', 'organizacion', 'animal'), ANY], enfrenta_a: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], companero_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], tripulacion_de: [TS('personaje'), TS('personaje')], aliado_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], amigo_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], coincidido_con: [TS('personaje'), TS('personaje')], mascota_de: [TS('personaje'), TS('personaje')], progenitor_de: [TS('personaje'), TS('personaje')], progenitor_adoptivo_de: [TS('personaje'), TS('personaje')], hermano_de: [TS('personaje'), TS('personaje')], hermano_adoptivo_de: [TS('personaje'), TS('personaje')], abuelo_de: [TS('personaje'), TS('personaje')], tio_de: [TS('personaje'), TS('personaje')], conyuge_de: [TS('personaje'), TS('personaje')], enemigo_de: [TS('personaje', 'organizacion'), TS('personaje', 'organizacion')], lado1: [TS('personaje', 'organizacion'), ANY], lado2: [TS('personaje', 'organizacion'), ANY], ocurre_en: [ANY, TS('lugar', 'naturaleza')], dirigido_por: [TS('organizacion', 'lugar'), TS('personaje')], de_nacion: [ANY, TS('lugar')],
   };
   const DROP = new Set(['clase']); // «clase» de fruta o persona es un dato de la ficha (Paramecia, Zoan, Logia…), no una relación con una página genérica
   const viol = new Map(); const kept = [];
@@ -77,9 +77,37 @@ Cada par de personas recibe solo su categoría más cercana:
 
 Excepciones manuales: Chopper, Carrot, Bepo, Pekoms, Pedro y Wanda no cuentan como mascotas. Los enemigos y enfrentamientos salen de los textos y de los bandos de cada combate (data/auditoria-enfrentamientos.md). Orden dentro de cada grupo: importancia de la ficha. Estas reglas viven en scripts/emit-web.mjs y se aplican en cada actualización.
 `); console.log('vínculos entre personas — tripulación:', cnt[0], 'aliados:', cnt[1], 'amigos:', cnt[2], 'han coincidido:', cnt[3]); globalThis.__compStat = { cnt, orgs: stat }; }
+    // familia: un parentesco tipado sustituye al genérico «familiar_de» de la misma pareja; comprobaciones de coherencia y informe
+    { const K = ['progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'abuelo_de', 'tio_de', 'conyuge_de'].map((n) => relNames.indexOf(n)); const GEN = relNames.indexOf('familiar_de'); const key = (a, b) => (a < b ? a + '|' + b : b + '|' + a);
+      const tipadas = new Set(edges.filter((e) => K.includes(e[2])).map(([a, b]) => key(a, b))); const antesGen = edges.filter((e) => e[2] === GEN).length;
+      edges = edges.filter((e) => e[2] !== GEN || !tipadas.has(key(e[0], e[1]))); const despuesGen = edges.filter((e) => e[2] === GEN).length;
+      const P = relNames.indexOf('progenitor_de'); const hijos = new Map(), padres = new Map(); for (const [a, b, r] of edges) if (r === P) { (hijos.get(a) ?? hijos.set(a, []).get(a)).push(b); (padres.get(b) ?? padres.set(b, new Set()).get(b)).add(a); }
+      const demasiados = [...padres].filter(([, s]) => s.size > 2).map(([h, s]) => `${list[h].id} (${[...s].map((x) => list[x].id).join(', ')})`);
+      const ciclos = []; const estado = new Map(); const dfs = (n, pila) => { estado.set(n, 1); for (const c of hijos.get(n) ?? []) { if (estado.get(c) === 1) { ciclos.push([...pila, n, c].map((x) => list[x].id).join(' → ')); } else if (!estado.has(c)) dfs(c, [...pila, n]); } estado.set(n, 2); }; for (const n of hijos.keys()) if (!estado.has(n)) dfs(n, []);
+      const propios = edges.filter((e) => K.includes(e[2]) && e[0] === e[1]).length; const cnt = Object.fromEntries(K.map((r) => [relNames[r], edges.filter((e) => e[2] === r).length]));
+      globalThis.__fam = { cnt, antesGen, despuesGen, demasiados, ciclos, propios }; console.log('parentescos tipados:', JSON.stringify(cnt), '· genéricos', antesGen, '→', despuesGen, '· >2 progenitores:', demasiados.length, '· ciclos:', ciclos.length); }
+    // contradicciones: un vínculo positivo fuerte (misma tripulación, alianza, familia, amistad o la misma organización) anula «Enemigos»
+    { const POS = new Set(['tripulacion_de', 'aliado_de', 'familiar_de', 'amigo_de', 'mascota_de', 'progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'abuelo_de', 'tio_de', 'conyuge_de'].map((n) => relNames.indexOf(n))); const EN = relNames.indexOf('enemigo_de');
+      const orgsOf = new Map(); for (const [x, y, r] of edges) if (relNames[r] === 'miembro_de' && tipo(x) === 'personaje' && tipo(y) === 'organizacion') { if (!orgsOf.has(x)) orgsOf.set(x, new Set()); orgsOf.get(x).add(y); }
+      const key = (a, b) => (a < b ? a + '|' + b : b + '|' + a); const pos = new Set(edges.filter((e) => POS.has(e[2])).map(([a, b]) => key(a, b)));
+      const sameOrg = (a, b) => { const A = orgsOf.get(a), B = orgsOf.get(b); if (!A || !B) return false; for (const o of A) if (B.has(o)) return true; return false; };
+      const ejemplos = []; let antes = 0, quitadas = 0; const out = [];
+      for (const e of edges) { if (e[2] !== EN) { out.push(e); continue; } antes++; if (pos.has(key(e[0], e[1])) || sameOrg(e[0], e[1])) { quitadas++; if (ejemplos.length < 12) ejemplos.push(list[e[0]].id + ' – ' + list[e[1]].id); continue; } out.push(e); }
+      edges = out; globalThis.__contra = { antes, quitadas, ejemplos }; console.log('contradicciones «Enemigos» con vínculo positivo o misma organización:', quitadas, 'de', antes); }
     edges = edges.filter(([, , r]) => relNames[r] !== 'lado1' && relNames[r] !== 'lado2');
     writeFileSync('data/auditoria-enfrentamientos.md', `# Enfrentamientos derivados\n\nPares de combatientes de bandos opuestos en el mismo combate/arco: ${nEf}. Fichas con al menos un enfrentamiento: ${chars.size}. Combates con dos bandos: ${sides.size}.\n\nSolo se usan los campos combatientes1/combatientes2 de la infobox de cada combate o arco; si una ficha no los tiene, no se inventan bandos.\n\nEjemplos: ${casos.join(' · ')}\n`); }
   writeFileSync('data/auditoria-relaciones.md', `# Auditoría de relaciones\n\nSe descartan los enlaces cuyo tipo de origen o destino no encaja con la relación. Total descartado: ${[...viol.values()].reduce((a, v) => a + v.n, 0)}. Reclasificadas por tipo de origen: ${[...new Set(reclass)].map((k) => `${k} (${reclass.filter((x) => x === k).length})`).join(', ')}.\n\n| Relación y tipos (origen→destino) | Descartadas | Ejemplos |\n|---|---:|---|\n${[...viol].sort((a, b) => b[1].n - a[1].n).map(([k, v]) => `| ${k} | ${v.n} | ${v.ex.join(' · ')} |\n`).join('')}\nCausas: «doblado_por» salía de la lista de reparto en plantillas de películas y episodios (la persona real casi nunca tiene ficha: el actor queda como dato clave); «clase» enlazaba con páginas genéricas («Fruta del diablo/Zoan»), ahora es dato clave; «es_de_raza», «reside_en», etc. se validan por tipo de destino.\n`);
+  { const c = globalThis.__contra ?? { antes: 0, quitadas: 0, ejemplos: [] }; writeFileSync('data/auditoria-contradicciones.md', `# Contradicciones entre relaciones
+
+Regla: un vínculo positivo fuerte (misma tripulación, alianza, familia, amistad, mascota) o pertenecer a la misma organización anula «Enemigos». Los duelos y entrenamientos entre compañeros solo pueden aparecer como «Enfrentamientos». «Enemigos» exige evidencia explícita (la palabra «enemigo/antagonista/némesis» en el primer párrafo de su subsección de «Relaciones»).
+
+| | Antes | Después |
+|---|---:|---:|
+| Parejas «Enemigos» | ${c.antes} | ${c.antes - c.quitadas} |
+| Contradictorias (con vínculo positivo o misma organización) | ${c.quitadas} | 0 |
+
+Ejemplos corregidos: ${c.ejemplos.join('; ')}.
+`); }
   const violAfter = edges.filter(([s, t, r]) => { const m = MATRIX[relNames[r]]; if (!m || list[s].id.includes('/') || list[t].id.includes('/')) return false; return (m[0] && !m[0].has(tipo(s))) || (m[1] && !m[1].has(tipo(t))); }).length;
   writeFileSync('data/auditoria-relaciones.json', JSON.stringify({ descartadas: Object.fromEntries([...viol].map(([k, v]) => [k, v.n])), violacionesRestantes: violAfter, clase: edges.filter((x) => relNames[x[2]] === 'clase').length }, null, 1));
   // ---- género de las fichas de personaje (categorías «Masculinos/Femeninos»; si faltan, primera frase del resumen)
@@ -92,7 +120,7 @@ Excepciones manuales: Chopper, Carrot, Bepo, Pekoms, Pedro y Wanda no cuentan co
   for (const [s, t, r] of edges) { if (!WEAK.has(relNames[r])) { imp[s]++; imp[t]++; } relsOf[s].push([r, t, 0]); relsOf[t].push([r, s, 1]); }
   list.forEach((_, i) => { imp[i] += mentionedBy[i].length * 0.01; });
   // orden de las relaciones de cada ficha: las estructuradas primero (por tipo e importancia del otro extremo), las débiles al final; así el recorte a 400 nunca pierde familia, compañeros o rivales
-  { const PRI = ['miembro_de', 'capitan_de', 'familiar_de', 'tripulacion_de', 'mascota_de', 'aliado_de', 'amigo_de', 'enemigo_de', 'enfrenta_a', 'coincidido_con', 'usa_barco', 'come', 'originario_de', 'reside_en', 'base_en', 'dirigido_por', 'parte_de', 'evoluciona_en', 'propiedad_de', 'combatiente_en']; const pr = (r) => (WEAK.has(relNames[r]) ? 99 : PRI.indexOf(relNames[r]) < 0 ? 50 : PRI.indexOf(relNames[r])); for (const arr of relsOf) arr.sort((x, y) => pr(x[0]) - pr(y[0]) || imp[y[1]] - imp[x[1]]); }
+  { const PRI = ['miembro_de', 'capitan_de', 'familiar_de', 'progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'abuelo_de', 'tio_de', 'conyuge_de', 'tripulacion_de', 'mascota_de', 'aliado_de', 'amigo_de', 'enemigo_de', 'enfrenta_a', 'coincidido_con', 'usa_barco', 'come', 'originario_de', 'reside_en', 'base_en', 'dirigido_por', 'parte_de', 'evoluciona_en', 'propiedad_de', 'combatiente_en']; const pr = (r) => (WEAK.has(relNames[r]) ? 99 : PRI.indexOf(relNames[r]) < 0 ? 50 : PRI.indexOf(relNames[r])); for (const arr of relsOf) arr.sort((x, y) => pr(x[0]) - pr(y[0]) || imp[y[1]] - imp[x[1]]); }
 
   // resumen con enlaces internos: [[Título|texto]] -> ⟦idx|texto⟧
   const mark = (s) => (s ?? '').replace(/\[\[([^|\]]+)\|([^\]]*)\]\]/g, (_m, t, txt) => { const id = resolve(t); return id !== undefined && idx.has(id) ? `⟦${idx.get(id)}|${txt}⟧` : txt; });

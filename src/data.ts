@@ -49,7 +49,7 @@ export const TYPE_ICON: Record<string, string> = {
 export const FACE_TYPES = new Set(['personaje', 'animal', 'persona_real', 'raza']);
 // aristas: color, grosor y trazo por relación
 export const REL_STYLE: Record<string, { c: string; w: number; d?: string }> = {
-  miembro_de: { c: '#59c98b', w: 1.8 }, companero_de: { c: '#2dd4bf', w: 2 }, tripulacion_de: { c: '#2dd4bf', w: 2.4 }, aliado_de: { c: '#38bdf8', w: 2 }, amigo_de: { c: '#a3e635', w: 2 }, coincidido_con: { c: '#8aa0bd', w: 1.2 }, mascota_de: { c: '#f59e0b', w: 2 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
+  miembro_de: { c: '#59c98b', w: 1.8 }, progenitor_de: { c: '#ff7ac0', w: 2.4 }, progenitor_adoptivo_de: { c: '#ff9bd2', w: 2.2 }, hermano_de: { c: '#f472b6', w: 2.2 }, hermano_adoptivo_de: { c: '#f9a8d4', w: 2.2 }, abuelo_de: { c: '#e879a9', w: 2 }, tio_de: { c: '#fb7185', w: 2 }, conyuge_de: { c: '#fb5f8d', w: 2.4 }, companero_de: { c: '#2dd4bf', w: 2 }, tripulacion_de: { c: '#2dd4bf', w: 2.4 }, aliado_de: { c: '#38bdf8', w: 2 }, amigo_de: { c: '#a3e635', w: 2 }, coincidido_con: { c: '#8aa0bd', w: 1.2 }, mascota_de: { c: '#f59e0b', w: 2 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
   originario_de: { c: '#b48cf2', w: 1.5, d: '5 4' }, reside_en: { c: '#b48cf2', w: 1.5, d: '5 4' }, en_region: { c: '#b48cf2', w: 1.5, d: '5 4' }, base_en: { c: '#b48cf2', w: 1.5, d: '5 4' },
   parte_de: { c: '#ffb27a', w: 1.8 }, anterior: { c: '#ffb27a', w: 1.8 }, siguiente: { c: '#ffb27a', w: 1.8 }, dirigido_por: { c: '#9aa7ff', w: 1.8 }, menciona: { c: '#c5d6ee', w: 1.1, d: '2 4' },
 };
@@ -62,7 +62,7 @@ export const REL_LABEL: Record<string, [string, string]> = {
   doblado_por: ['Doblado por', 'Dobla a'], en_region: ['Región', 'Contiene'], dirigido_por: ['Dirigido por', 'Dirige'], clase: ['Clase', 'Incluye'], base_en: ['Base en', 'Base de'], de_nacion: ['Nación', 'Naciones'],
   propiedad_de: ['Propiedad de', 'Propietario'], relacionado: ['Relacionado con', 'Relacionado con'], categorizado_en: ['Categoría', 'En esta categoría'], menciona: ['Se mencionan', 'Se mencionan'],
 };
-export const REL_ORDER = ['miembro_de', 'capitan_de', 'familiar_de', 'tripulacion_de', 'mascota_de', 'aliado_de', 'amigo_de', 'enemigo_de', 'enfrenta_a', 'coincidido_con', 'usa_barco', 'come', 'evoluciona_en', 'familiar_de', 'originario_de', 'reside_en', 'parte_de', 'combatiente_en', 'ocurre_en', 'base_en', 'dirigido_por', 'es_de_raza', 'anterior', 'siguiente', 'aparece_en', 'primera_aparicion', 'clase', 'doblado_por', 'en_region', 'de_nacion', 'propiedad_de', 'relacionado'];
+export const REL_ORDER = ['miembro_de', 'capitan_de', 'familiar_de', 'progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'abuelo_de', 'tio_de', 'conyuge_de', 'tripulacion_de', 'mascota_de', 'aliado_de', 'amigo_de', 'enemigo_de', 'enfrenta_a', 'coincidido_con', 'usa_barco', 'come', 'evoluciona_en', 'familiar_de', 'originario_de', 'reside_en', 'parte_de', 'combatiente_en', 'ocurre_en', 'base_en', 'dirigido_por', 'es_de_raza', 'anterior', 'siguiente', 'aparece_en', 'primera_aparicion', 'clase', 'doblado_por', 'en_region', 'de_nacion', 'propiedad_de', 'relacionado'];
 export const WEAK = new Set(['categorizado_en', 'primera_aparicion', 'aparece_en', 'es_de_raza', 'clase', 'relacionado', 'doblado_por']);
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -150,7 +150,14 @@ export function subjOf(i: number): { g: 'm' | 'f'; pl: boolean } {
   return { g: ty === 'organizacion' ? (FEM_ORG.test(n) ? 'f' : 'm') : IDX?.g?.[i] === 'f' ? 'f' : 'm', pl };
 }
 /** Etiqueta natural de una relación vista desde la ficha `self`; `dir` 0 = la ficha es el origen; `count` = nº de fichas del grupo */
-export function relLabel(rel: string, dir: number, self: number, count = 1): string {
+const KINL: Record<string, [string[], string[]]> = {
+  progenitor_de: [['Hijo', 'Hija', 'Hijos', 'Hijas'], ['Padre', 'Madre', 'Padres', 'Madres']], progenitor_adoptivo_de: [['Hijo adoptivo', 'Hija adoptiva', 'Hijos adoptivos', 'Hijas adoptivas'], ['Padre adoptivo', 'Madre adoptiva', 'Padres adoptivos', 'Madres adoptivas']],
+  hermano_de: [['Hermano', 'Hermana', 'Hermanos', 'Hermanas'], ['Hermano', 'Hermana', 'Hermanos', 'Hermanas']], hermano_adoptivo_de: [['Hermano adoptivo', 'Hermana adoptiva', 'Hermanos adoptivos', 'Hermanas adoptivas'], ['Hermano adoptivo', 'Hermana adoptiva', 'Hermanos adoptivos', 'Hermanas adoptivas']],
+  abuelo_de: [['Nieto', 'Nieta', 'Nietos', 'Nietas'], ['Abuelo', 'Abuela', 'Abuelos', 'Abuelas']], tio_de: [['Sobrino', 'Sobrina', 'Sobrinos', 'Sobrinas'], ['Tío', 'Tía', 'Tíos', 'Tías']], conyuge_de: [['Cónyuge', 'Cónyuge', 'Cónyuges', 'Cónyuges'], ['Cónyuge', 'Cónyuge', 'Cónyuges', 'Cónyuges']],
+};
+const genOf = (j: number) => (IDX?.g?.[j] === 'f' ? 'f' : 'm');
+export function relLabel(rel: string, dir: number, self: number, count = 1, ids: number[] = []): string {
+  const kin = KINL[rel]; if (kin) { const f = kin[dir === 0 ? 0 : 1]; const gs = new Set(ids.map(genOf)); const n = Math.max(count, ids.length); if (n <= 1) return gs.has('f') ? f[1]! : f[0]!; return gs.size === 1 && gs.has('f') ? f[3]! : f[2]!; }
   const SYM: Record<string, string> = { familiar_de: 'Familia', companero_de: 'Compañeros', tripulacion_de: 'Tripulación', aliado_de: 'Aliados', amigo_de: 'Amigos', coincidido_con: 'Han coincidido', enemigo_de: 'Enemigos', enfrenta_a: 'Enfrentamientos' }; if (SYM[rel]) return SYM[rel]!;
   if (dir === 0) { const f = SELF[rel]; if (!f) return rel.replace(/_/g, ' '); const s = subjOf(self); return s.pl ? f[2] : s.g === 'f' ? f[1] : f[0]; }
   if (rel === 'menciona') { const s = subjOf(self); return s.pl ? 'Mencionados en' : s.g === 'f' ? 'Mencionada en' : 'Mencionado en'; }
