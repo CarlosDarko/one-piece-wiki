@@ -1,0 +1,27 @@
+{
+  "name": "wiki-one-piece",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "crawl": "node scripts/supervisor.mjs",
+    "catparents": "node scripts/fetch-catparents.mjs",
+    "build:data": "node scripts/build-data.mjs",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "start": "vite preview --port 4173 --open",
+    "all": "npm run build:data && npm run build && npm start"
+  },
+  "devDependencies": {
+    "@types/d3-force": "^3.0.10",
+    "@types/d3-selection": "^3.0.12",
+    "@types/d3-zoom": "^3.0.9",
+    "cheerio": "^1.2.0",
+    "d3-drag": "^3.0.0",
+    "d3-force": "^3.0.0",
+    "d3-selection": "^3.0.0",
+    "d3-zoom": "^3.0.0",
+    "puppeteer-core": "^25.16.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.5"
+  }
+}

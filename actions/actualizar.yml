@@ -1,0 +1,50 @@
+# Actualización automática: detecta cambios en la wiki, reconstruye y publica en GitHub Pages.
+# Vive en la rama "fuente" (código + estado pequeño). Publica el resultado en la rama "main" (lo que sirve Pages).
+# La caché de fichas (~130 MB) se guarda como asset de la release "cache" y se sube de nuevo tras cada ejecución.
+# Comprobado: la API de la wiki responde con normalidad desde los runners (probar-api.yml), así que el cron semanal está activo.
+name: Actualizar el atlas
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'   # cada lunes a las 07:00 UTC
+permissions:
+  contents: write
+concurrency: { group: actualizar, cancel-in-progress: false }
+env:
+  MAX_ESPERA_TOTAL_MS: '600000'      # si la API bloquea, no esperar horas: falla a los 10 min con un mensaje claro
+  BROWSER: /usr/bin/google-chrome
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: fuente }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Descargar la caché de fichas (release "cache")
+        run: |
+          mkdir -p data/pages
+          gh release download cache --pattern 'pages.tar.gz' --dir /tmp || { echo "::error::No existe la release 'cache' con pages.tar.gz (ver actions/LEEME.md)"; exit 1; }
+          tar -xzf /tmp/pages.tar.gz -C data
+      - name: Detectar cambios, descargar lo nuevo y reconstruir
+        run: node scripts/actualizar.mjs --sin-publicar --forzar
+      - name: Pruebas con Chrome
+        run: node scripts/prueba-humo.mjs
+      - name: Guardar la caché actualizada y el estado
+        run: |
+          tar -czf /tmp/pages.tar.gz -C data pages
+          gh release upload cache /tmp/pages.tar.gz --clobber
+          git config user.name "atlas-bot"; git config user.email "atlas-bot@users.noreply.github.com"
+          git add data/sync.json data/novedades.json data/revs.json data/redirects.json data/catparents.json data/ultima-actualizacion.json || true
+          git diff --cached --quiet || { git commit -m "Estado de la sincronización"; git push origin fuente; }
+      - name: Publicar en main (GitHub Pages)
+        run: |
+          rm -rf /tmp/sitio && git clone --depth 1 --branch main "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" /tmp/sitio
+          find /tmp/sitio -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
+          cp -r dist/. /tmp/sitio/ && touch /tmp/sitio/.nojekyll
+          cp actions/README-sitio.md /tmp/sitio/README.md
+          cd /tmp/sitio && git config user.name "atlas-bot" && git config user.email "atlas-bot@users.noreply.github.com"
+          git add -A && { git diff --cached --quiet && echo "Sin cambios que publicar" || { git commit -m "Actualización automática $(date -u +%F)"; git push origin main; }; }

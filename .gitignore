@@ -1,0 +1,9 @@
+node_modules
+dist
+capturas
+data/pages
+data/cache
+data/raw
+public/data
+publicar
+*.log
