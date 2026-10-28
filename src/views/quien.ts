@@ -5,7 +5,7 @@ import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zo
 import { select } from 'd3-selection';
 import { IDX, IMGS, REL_LABEL, REL_ORDER, TYPE_COLOR, TYPE_LABEL, avatarHtml, relLabel, shownName, evText, GREY_RELS, ensureImgs, ensureIndex, esc, fmtN, findByTitle, getDetail, imgUrl, impOf, initials, isFace, loadData, nameOf, relStyle, rootOf, typeOf, type Detail } from '../data';
 import { go, navigateToFicha, parseHash } from '../nav';
-import { KIN_RELS, kinSubLabel, showFicha } from '../panel';
+import { KIN_RELS, closeQuiet, kinSubLabel, showFicha } from '../panel';
 import { attachSearch, searchIndex } from '../search';
 import type { View } from './view';
 
@@ -26,7 +26,14 @@ export class QuienView implements View {
   private root!: HTMLElement; private home!: HTMLElement; private stage!: HTMLElement; private pathBox!: HTMLElement; private svg!: SVGSVGElement; private vp!: SVGGElement; private disposers: (() => void)[] = [];
   private zb!: ZoomBehavior<SVGSVGElement, unknown>; private t: ZoomTransform = zoomIdentity; private ro?: ResizeObserver; private token = 0; private cur = -1; private bbox = { x0: -300, y0: -300, x1: 300, y1: 300 };
   private groups: Group[] = []; private shown = new Map<string, number>(); private center = -1; private listMode = false; private edges: { adj: Map<number, [number, number, number][]>; rels: string[] } | null = null; private chosen: [number, number] = [-1, -1];
-  private why = new Map<number, string>(); canExpand = false; noAutoPanel = () => { try { return localStorage.getItem('opa-panel') === 'cerrado'; } catch { return false; } }; // la ficha lateral se abre sola salvo que el usuario la haya plegado (se recuerda)
+  private why = new Map<number, string>(); private nativeFs = false; private maxPanel = false; canExpand = false;
+  // «maximizado»: oculta cabecera y pie (la cabecera baja al enfocar el buscador), la franja del grafo flota sobre el lienzo y la ficha lateral se pliega; al salir se recupera el estado exacto
+  private setMax(on: boolean, native = true) {
+    const body = document.body; if (on === body.classList.contains('q-max')) return; const btn = this.stage.querySelector('#q-full') as HTMLElement;
+    if (on) { this.maxPanel = !(document.getElementById('panel') as HTMLElement).hidden; body.classList.add('q-max'); closeQuiet(); btn.setAttribute('aria-pressed', 'true'); btn.setAttribute('aria-label', 'Salir de la pantalla completa'); btn.textContent = '✕'; this.nativeFs = false; const r = native ? document.documentElement.requestFullscreen?.() : undefined; if (r) r.then(() => { this.nativeFs = true; }, () => { this.nativeFs = false; }); }
+    else { body.classList.remove('q-max'); btn.setAttribute('aria-pressed', 'false'); btn.setAttribute('aria-label', 'Pantalla completa del grafo'); btn.textContent = '⛶'; const was = this.nativeFs; this.nativeFs = false; if (was && document.fullscreenElement) void document.exitFullscreen().catch(() => {}); if (this.maxPanel && this.center >= 0) void showFicha(this.center, { canExpand: false }); this.maxPanel = false; }
+    for (const ms of [60, 250, 600]) window.setTimeout(() => this.fit(false), ms);
+  } noAutoPanel = () => { if (document.body.classList.contains('q-max')) return true; try { return localStorage.getItem('opa-panel') === 'cerrado'; } catch { return false; } }; // la ficha lateral se abre sola salvo que el usuario la haya plegado (se recuerda)
 
   async mount(host: HTMLElement) {
     const box = document.createElement('div'); box.className = 'quien'; host.append(box); this.root = box;
@@ -37,9 +44,9 @@ export class QuienView implements View {
     await this.renderHome();
     this.buildStage();
   }
-  unmount() { document.body.classList.remove('q-graph', 'q-full'); this.token++; this.ro?.disconnect(); this.disposers.forEach((d) => d()); this.root.remove(); }
+  unmount() { document.body.classList.remove('q-graph', 'q-max'); this.token++; this.ro?.disconnect(); this.disposers.forEach((d) => d()); this.root.remove(); }
   focus(i: number | null) { const q = parseHash().q; const de = q.get('de'), a = q.get('a'); if (i === null && de && a) { void this.showPath(de, a); return; } if (i === null) { this.show('home'); return; } void this.showGraph(rootOf(i)); }
-  private show(w: 'home' | 'path' | 'graph') { if (w !== 'graph') document.body.classList.remove('q-graph', 'q-full'); this.home.hidden = w !== 'home'; this.pathBox.hidden = w !== 'path'; this.stage.hidden = w !== 'graph'; this.root.dataset.mode = w; if (w === 'home') this.cur = -1; }
+  private show(w: 'home' | 'path' | 'graph') { if (w !== 'graph') document.body.classList.remove('q-graph', 'q-max'); this.home.hidden = w !== 'home'; this.pathBox.hidden = w !== 'path'; this.stage.hidden = w !== 'graph'; this.root.dataset.mode = w; if (w === 'home') this.cur = -1; }
 
   // ---------- portada: gran buscador y descubrimiento ----------
   private async renderHome() {
@@ -66,7 +73,7 @@ export class QuienView implements View {
 
   // ---------- grafo con la ficha en el centro ----------
   private buildStage() {
-    this.stage.innerHTML = `<div class="q-bar" id="q-bar"><div class="q-title"><h2 id="q-name"></h2><span class="q-type" id="q-type"></span><button class="btn small q-open" id="q-open">Ver la ficha</button></div><details class="q-filt" id="q-filt"><summary><span class="fs-t">Relaciones</span> <span class="fs-n" id="q-fn"></span></summary><div class="q-fbody"><p class="q-fhelp"><b>Mostrar / ocultar relaciones:</b> pulsa un tipo para ocultarlo o volver a mostrarlo (✓ = visible).</p><div class="q-ftools"><button class="btn small" data-g="*">Mostrar todo</button> <button class="btn ghost small" data-g="-">Ocultar todo</button></div><div class="q-legend" id="q-legend" role="group" aria-label="Tipos de relación: pulsa para mostrar u ocultar"></div></div></details><div class="seg" role="group" aria-label="Forma de ver las relaciones"><button id="q-vg" aria-pressed="true">Grafo</button><button id="q-vl" aria-pressed="false">Lista</button></div><button class="icon-btn q-full" id="q-full" aria-label="Pantalla completa del grafo" title="Pantalla completa">⛶</button></div>
+    this.stage.innerHTML = `<div class="q-bar" id="q-bar"><div class="q-title"><h2 id="q-name"></h2><span class="q-type" id="q-type"></span><button class="btn small q-open" id="q-open">Ver la ficha</button></div><details class="q-filt" id="q-filt"><summary><span class="fs-t">Relaciones</span> <span class="fs-n" id="q-fn"></span></summary><div class="q-fbody"><p class="q-fhelp"><b>Mostrar / ocultar relaciones:</b> pulsa un tipo para ocultarlo o volver a mostrarlo (✓ = visible).</p><div class="q-ftools"><button class="btn small" data-g="*">Mostrar todo</button> <button class="btn ghost small" data-g="-">Ocultar todo</button></div><div class="q-legend" id="q-legend" role="group" aria-label="Tipos de relación: pulsa para mostrar u ocultar"></div></div></details><div class="seg" role="group" aria-label="Forma de ver las relaciones"><button id="q-vg" aria-pressed="true">Grafo</button><button id="q-vl" aria-pressed="false">Lista</button></div><button class="icon-btn q-find" id="q-find" aria-label="Buscar una ficha" title="Buscar ( / )">⌕</button><button class="icon-btn q-full" id="q-full" aria-label="Pantalla completa del grafo" aria-pressed="false" title="Pantalla completa (Esc para salir)">⛶</button></div>
       <div class="q-canvas" id="q-canvas"><svg class="qsvg" role="group" aria-label="Grafo de relaciones de la ficha elegida: pulsa un nodo para centrarlo"></svg><div class="gtools" role="toolbar" aria-label="Zoom del grafo"><button data-z="in" aria-label="Acercar">＋</button><button data-z="out" aria-label="Alejar">－</button><button data-z="fit" aria-label="Encajar el grafo" title="Encajar">⤢</button></div><p class="q-hint" id="q-hint">Pulsa un nodo para centrarlo · pellizca o usa la rueda para ampliar</p></div>
       <div class="q-list" id="q-list" hidden></div>`;
     this.svg = this.stage.querySelector('svg')!; this.vp = el('g', { class: 'vp' }, this.svg) as SVGGElement;
@@ -75,7 +82,10 @@ export class QuienView implements View {
     this.stage.querySelector('.gtools')!.addEventListener('click', (e) => { const z = (e.target as HTMLElement).closest<HTMLElement>('[data-z]')?.dataset.z; if (z === 'in') select(this.svg).call(this.zb.scaleBy, 1.4); else if (z === 'out') select(this.svg).call(this.zb.scaleBy, 1 / 1.4); else if (z === 'fit') this.fit(true); });
     this.svg.addEventListener('click', (e) => { const n = (e.target as Element).closest<SVGElement>('[data-i]'); if (n) { navigateToFicha(+n.dataset.i!); return; } const m = (e.target as Element).closest<SVGElement>('[data-more]'); if (m) this.expand(m.dataset.more!); });
     this.svg.addEventListener('keydown', (e) => { if (e.key !== 'Enter' && e.key !== ' ') return; const n = (e.target as Element).closest<SVGElement>('[data-i],[data-more]'); if (n) { e.preventDefault(); (n as unknown as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
-    (this.stage.querySelector('#q-full') as HTMLElement).addEventListener('click', () => { const on = document.body.classList.toggle('q-full'); try { if (on) void document.documentElement.requestFullscreen?.(); else if (document.fullscreenElement) void document.exitFullscreen(); } catch { /* sin pantalla completa nativa */ } window.setTimeout(() => this.fit(false), 120); });
+    (this.stage.querySelector('#q-full') as HTMLElement).addEventListener('click', () => this.setMax(!document.body.classList.contains('q-max')));
+    (this.stage.querySelector('#q-find') as HTMLElement).addEventListener('click', () => (document.getElementById('q') as HTMLInputElement).focus());
+    const onFs = () => { if (!document.fullscreenElement && this.nativeFs && document.body.classList.contains('q-max')) this.setMax(false, false); }; const onEsc = (e: KeyboardEvent) => { if (e.key === 'Escape' && document.body.classList.contains('q-max') && !(e.target as HTMLElement).closest('input')) this.setMax(false); };
+    document.addEventListener('fullscreenchange', onFs); document.addEventListener('keydown', onEsc); this.disposers.push(() => { document.removeEventListener('fullscreenchange', onFs); document.removeEventListener('keydown', onEsc); });
     (this.stage.querySelector('#q-open') as HTMLElement).addEventListener('click', () => { try { localStorage.removeItem('opa-panel'); } catch { /* sin almacenamiento */ } void showFicha(this.center, { canExpand: false }); });
     const onClose = (e: Event) => { if ((e.target as HTMLElement).closest('#pb-close')) { try { localStorage.setItem('opa-panel', 'cerrado'); } catch { /* sin almacenamiento */ } } }; document.addEventListener('click', onClose, true); this.disposers.push(() => document.removeEventListener('click', onClose, true));
     (this.stage.querySelector('#q-vg') as HTMLElement).addEventListener('click', () => this.setList(false)); (this.stage.querySelector('#q-vl') as HTMLElement).addEventListener('click', () => this.setList(true));

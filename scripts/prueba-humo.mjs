@@ -378,6 +378,23 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   const pq = await p.evaluate(() => [...document.querySelectorAll('.qn[data-i] title')].filter((t) => t.textContent.includes('¿Por qué?')).length);
   check('«¿Por qué?»: los nodos del grafo explican su evidencia (infobox, categoría o regla)', pq >= 5, String(pq)); await p.close();
 }
+// ---------- pantalla completa del grafo: entrar y salir sin romper nada, en 6 tamaños y 3 ciclos ----------
+{
+  const mal = [];
+  for (const [w, h, mob] of [[1920, 1080, false], [1440, 900, false], [1366, 768, false], [390, 844, true], [360, 640, true], [844, 390, true]]) {
+    const pg = await page(w, h, mob); const errs = []; pg.on('pageerror', (e) => errs.push(e.message)); await goto(pg, '#/quien/' + ficha('Monkey D. Luffy')); await pg.waitForSelector('.qn.center'); await sleep(800);
+    const snap = () => pg.evaluate(() => { const r = document.getElementById('q-canvas').getBoundingClientRect(); const t = document.querySelector('.top').getBoundingClientRect(); return { cv: [Math.round(r.width), Math.round(r.height), Math.round(r.left), Math.round(r.top)], top: Math.round(t.top), body: [document.body.offsetWidth, document.body.offsetHeight], cls: document.body.className.replace(/\s*q-max/, '') }; });
+    const base = await snap();
+    for (let c = 0; c < 3; c++) {
+      await pg.click('#q-full'); await sleep(900); const dentro = await pg.evaluate(() => { const r = document.getElementById('q-canvas').getBoundingClientRect(); return { frac: (r.width * r.height) / (innerWidth * innerHeight), max: document.body.classList.contains('q-max'), pulsado: document.getElementById('q-full').getAttribute('aria-pressed') }; });
+      if (!dentro.max || dentro.frac < 0.95 || dentro.pulsado !== 'true') mal.push(`${w}x${h} ciclo ${c} dentro ${JSON.stringify(dentro)}`);
+      if (c % 2 === 0) await pg.keyboard.press('Escape'); else await pg.click('#q-full'); await sleep(900);
+      const fuera = await snap(); if (JSON.stringify(fuera) !== JSON.stringify(base)) mal.push(`${w}x${h} ciclo ${c} no vuelve igual: ${JSON.stringify(base)} → ${JSON.stringify(fuera)}`);
+    }
+    if (errs.length) mal.push(`${w}x${h} errores: ${errs[0]}`); await pg.close();
+  }
+  check('Pantalla completa del grafo: lienzo ≥95 % al entrar, sale con Esc o con el botón y el diseño vuelve idéntico (3 ciclos × 6 tamaños, sin errores)', mal.length === 0, mal.slice(0, 3).join(' · '));
+}
 // ---------- regresión de agrupaciones y relaciones ----------
 {
   const { readFileSync } = await import('node:fs'); const aud = JSON.parse(readFileSync(resolve(ROOT, 'data/auditoria-agrupaciones.json'), 'utf8'));
