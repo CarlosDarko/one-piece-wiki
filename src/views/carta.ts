@@ -7,9 +7,9 @@ import { navigateToFicha, parseHash, setParams } from '../nav';
 import { attachSearch } from '../search';
 import type { View } from './view';
 
-interface PlacesData { seas: string[]; kinds: string[]; p: [number, number, number, number, number][]; arcs: { i: number; n: string; s: number }[]; sagas: { i: number; n: string }[]; route: { a: number; p: number }[] }
+interface PlacesData { seas: string[]; kinds: string[]; p: [number, number, number, number, number][]; arcs: { i: number; n: string; s: number }[]; sagas: { i: number; n: string }[]; route: { a: number; p: number }[]; par: [number, number][] }
 interface Region { x: number; y: number; w: number; h: number }
-interface Marker { i: number; sea: number; kind: number; ch: number; ap: number; x: number; y: number; conf: number }
+interface Marker { i: number; sea: number; kind: number; ch: number; ap: number; x: number; y: number; conf: number; pa?: number }
 const LAYERS: [string, string][] = [['ruta', 'Ruta del viaje y barco'], ['nombres', 'Nombres de las islas'], ['mares', 'Mares y nombres de los mares'], ['linea', 'Red Line y Calm Belt'], ['adorno', 'Monstruos y adornos'], ['rejilla', 'Rejilla y escala']];
 const DEF_LAYERS: Record<string, string[]> = { carta: ['ruta', 'nombres', 'mares', 'linea', 'adorno'], precisa: ['ruta', 'nombres', 'mares', 'linea', 'rejilla'] };
 const CONF_TXT = ['baja: la wiki no sitúa el lugar con certeza; se agrupa donde corresponde', 'media: se conoce el mar y el orden de aparición, no la posición exacta', 'alta: parada de la ruta, con orden verificado en los capítulos'];
@@ -72,6 +72,7 @@ export class CartaView implements View {
       <div class="seg" role="group" aria-label="Forma de ver los lugares"><button id="v-map" aria-pressed="true">Mapa</button><button id="v-list" aria-pressed="false">Lista</button></div></div>
       <div class="map-stage"><svg class="msvg" role="group" tabindex="0" aria-label="Mapa del mundo de One Piece con sus lugares. Con el teclado: flechas para moverte, más y menos para el zoom, cero para verlo todo. Hay un modo lista accesible."></svg>
         <div class="c-top"><div class="seg c-style" role="group" aria-label="Estilo del mapa"><button type="button" id="s-carta" aria-pressed="true" title="Carta náutica ilustrada">Náutica</button><button type="button" id="s-precisa" aria-pressed="false" title="Vista precisa: rejilla, escala y posición aproximada señalada">Precisa</button></div><details class="c-lay" id="c-lay"><summary>Capas</summary><div class="c-lay-b">${LAYERS.map(([k, t]) => `<label><input type="checkbox" data-lay="${k}"> ${t}</label>`).join('')}<button type="button" class="linkish" id="lay-reset">Restablecer capas</button></div></details></div>
+        <div class="c-near" id="c-near" hidden></div>
         <div class="c-empty" id="c-empty" hidden><p><b>Ningún lugar cumple los filtros.</b></p><button class="btn" id="c-clear" type="button">Quitar filtros</button></div>
         <svg class="c-mini" id="c-mini" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg>
         <div class="gtools" role="toolbar" aria-label="Zoom de la carta"><button data-z="in" aria-label="Acercar">＋</button><button data-z="out" aria-label="Alejar">－</button><button data-z="fit" aria-label="Ver toda la carta" title="Ver todo">⤢</button></div>
@@ -91,6 +92,7 @@ export class CartaView implements View {
     root.querySelector('#v-map')!.addEventListener('click', () => this.setMode(false)); root.querySelector('#v-list')!.addEventListener('click', () => this.setMode(true));
     root.querySelector('#r-play')!.addEventListener('click', () => this.startRoute()); root.querySelector('#r-reset')!.addEventListener('click', () => this.resetRoute()); root.querySelector('#r-pp')!.addEventListener('click', () => this.toggleRoute());
     root.querySelector('#r-prev')!.addEventListener('click', () => { this.pause(); this.goStep(Math.max(0, this.step - 1)); }); root.querySelector('#r-next')!.addEventListener('click', () => { this.pause(); this.goStep(Math.min(this.data.route.length - 1, this.step + 1)); });
+    this.root.querySelector('#c-near')!.addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-p]'); if (b) navigateToFicha(+b.dataset.p!); });
     this.svg.addEventListener('click', (e) => {
       const c = (e.target as Element).closest<SVGElement>('[data-cl]'); if (c) { const [x0, y0, x1, y1] = c.dataset.cl!.split(',').map(Number) as [number, number, number, number]; this.fitRect(x0 - 14, y0 - 14, x1 - x0 + 28, y1 - y0 + 28); return; }
       const m = (e.target as Element).closest<SVGElement>('[data-p]'); if (m) navigateToFicha(+m.dataset.p!);
@@ -106,7 +108,10 @@ export class CartaView implements View {
 
   // ---------- colocación determinista: por mar, de izquierda a derecha según el capítulo de primera aparición ----------
   private layoutMarkers() {
-    const rs = new Set(this.data.route.map((r) => r.p)); const by = new Map<number, [number, number, number, number, number][]>(); for (const r of this.data.p) (by.get(r[1]) ?? by.set(r[1], []).get(r[1])!).push(r);
+    const rs = new Set(this.data.route.map((r) => r.p)); const by = new Map<number, [number, number, number, number, number][]>(); const kindOfP = new Map(this.data.p.map((r) => [r[0], r[2]])); const rawPar = new Map<number, number>(); for (const [c, p] of this.data.par ?? []) if (kindOfP.get(p) !== 3 && kindOfP.has(p)) rawPar.set(c, p);
+    const rootPar = (i: number) => { let p = rawPar.get(i), n = 0; while (p !== undefined && rawPar.has(p) && n++ < 5) p = rawPar.get(p); return p; }; const kids = new Map<number, number[]>(); const isKid = new Set<number>();
+    for (const [c] of rawPar) { const p = rootPar(c); if (p !== undefined && p !== c) { (kids.get(p) ?? kids.set(p, []).get(p)!).push(c); isKid.add(c); } }
+    for (const r of this.data.p) if (!isKid.has(r[0])) (by.get(r[1]) ?? by.set(r[1], []).get(r[1])!).push(r);
     for (const [s, rows] of by) {
       const r = REGIONS[s]!; const n = rows.length; rows.sort((a, b) => (a[3] || 1e6 + hash(a[0]) * 1e5) - (b[3] || 1e6 + hash(b[0]) * 1e5));
       const pad = 12, padTop = s === 7 ? 3 : s === 6 ? 16 : NOTES[s] ? 38 : 32, padLeft = s === 7 ? 150 : pad; const w = r.w - padLeft - pad, h = r.h - padTop - pad;
@@ -114,6 +119,8 @@ export class CartaView implements View {
       rows.forEach(([i, , kind, chap, ap], k) => { const cx = Math.floor(k / nrows), cy = k % nrows; this.markers.push({ i, sea: s, kind, ch: chap, ap, conf: rs.has(i) ? 2 : s !== 10 && chap > 0 ? 1 : 0, x: r.x + padLeft + (cx + 0.5 + (hash(i * 7) - 0.5) * 0.3) * cw, y: OY + r.y + padTop + (cy + 0.5 + (hash(i * 13) - 0.5) * 0.4) * ch }); });
     }
     for (const m of this.markers) this.byI.set(m.i, m);
+    // los lugares contenidos en otro (palacio, bar, puerto…) se dibujan en corona alrededor de quien los contiene
+    const row = new Map(this.data.p.map((r) => [r[0], r])); for (const [p, cs] of kids) { const pm = this.byI.get(p); if (!pm) continue; cs.sort((a, b) => (row.get(a)![3] || 1e6) - (row.get(b)![3] || 1e6)); cs.forEach((c, k) => { const r = row.get(c)!; const ring = Math.floor(k / 7), a = ((k % 7) / Math.min(7, cs.length - ring * 7)) * Math.PI * 2 + hash(c) * 0.6, d = 9 + ring * 8; const m: Marker = { i: c, sea: r[1], kind: r[2], ch: r[3], ap: r[4], conf: rs.has(c) ? 2 : r[3] > 0 && r[1] !== 10 ? 1 : 0, pa: p, x: pm.x + Math.cos(a) * d, y: pm.y + Math.sin(a) * d }; this.markers.push(m); this.byI.set(c, m); }); }
   }
 
   // ---------- el pergamino ----------
@@ -313,8 +320,19 @@ export class CartaView implements View {
   private updateMini() { if (!this.miniView) return; const w = this.svg.clientWidth, h = this.svg.clientHeight, k = this.z.k * this.s0; const x0 = (0 - this.z.x) / this.z.k, y0 = (0 - this.z.y) / this.z.k; const cx0 = (x0 - this.bx) / this.s0, cy0 = (y0 - this.by) / this.s0, cw = w / k, ch = h / k; const rx = Math.max(0, cx0), ry = Math.max(0, cy0), rw = Math.min(W, cx0 + cw) - rx, rh = Math.min(H, cy0 + ch) - ry; this.miniView.setAttribute('x', String(rx)); this.miniView.setAttribute('y', String(ry)); this.miniView.setAttribute('width', String(Math.max(20, rw))); this.miniView.setAttribute('height', String(Math.max(20, rh))); }
   private centerAt(x: number, y: number) { const vw = this.svg.clientWidth, vh = this.svg.clientHeight, k = this.z.k, sx = this.bx + x * this.s0, sy = this.by + y * this.s0; select(this.svg).call(this.zoomB.transform, zoomIdentity.translate(vw / 2 - sx * k, vh / 2 - sy * k).scale(k)); }
 
+  // ficha breve del lugar elegido: contención, mar, confianza de su posición y lugares cercanos
+  private renderNear(i: number | null) {
+    const box = this.root.querySelector<HTMLElement>('#c-near'); if (!box) return; const m = i === null ? undefined : this.byI.get(i); if (!m) { box.hidden = true; return; }
+    const D = this.data, name = (k: number) => '<button type="button" data-p="' + k + '">' + esc(nameOf(k)) + '</button>';
+    const inside = this.markers.filter((o) => o.pa === m.i).sort((a, b) => (a.ch || 1e9) - (b.ch || 1e9)).slice(0, 6);
+    const near = this.markers.filter((o) => o.i !== m.i && o.sea === m.sea && o.pa !== m.i && o.i !== m.pa && this.passes(o)).map((o) => ({ o, d: Math.hypot(o.x - m.x, o.y - m.y) })).sort((a, b) => a.d - b.d).slice(0, 5);
+    box.innerHTML = '<b>' + esc(nameOf(m.i)) + '</b> <small>' + esc(D.kinds[m.kind] ?? '') + ' · ' + esc(SEA_NAMES[m.sea] ?? '') + (m.ap >= 0 ? ' · ' + esc(short(D.arcs[m.ap]!.n)) : '') + '</small>'
+      + (m.pa !== undefined ? '<div><span>Dentro de</span> ' + name(m.pa) + '</div>' : '') + (inside.length ? '<div><span>Contiene</span> ' + inside.map((o) => name(o.i)).join('') + '</div>' : '')
+      + (near.length ? '<div><span>Cerca</span> ' + near.map((n) => name(n.o.i)).join('') + '</div>' : '') + '<p class="c-conf c' + m.conf + '">Posición ' + esc(CONF_TXT[m.conf]!.split(':')[0]!) + '</p>';
+    box.hidden = false;
+  }
   focus(i: number | null) {
-    this.selected = i; this.schedule(); if (i === null) return; const m = this.byI.get(i); if (!m) return;
+    this.selected = i; this.renderNear(i); this.schedule(); if (i === null) return; const m = this.byI.get(i); if (!m) return;
     if (!this.passes(m)) { this.f = { sea: '', saga: '', kind: '' }; ['f-sea', 'f-saga', 'f-kind'].forEach((id) => ((this.root.querySelector('#' + id) as HTMLSelectElement).value = '')); setParams({ m: null, s: null, k: null }); this.updateCount(); }
     // el panel lateral se abre justo después de enfocar: se centra cuando el lienzo ya ha cambiado de tamaño
     if (!this.listMode) window.setTimeout(() => { if (this.selected === i) this.centerOn(m); }, 280);

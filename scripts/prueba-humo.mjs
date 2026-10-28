@@ -118,6 +118,10 @@ await p.select('#f-sea', '7'); await p.select('#f-kind', '3'); await sleep(500);
 const vacio = await vis('#c-empty'); if (vacio) { await p.click('#c-clear'); await sleep(400); }
 check('Filtros sin resultados: aviso con «Quitar filtros» que restablece', !vacio || (!(await vis('#c-empty')) && (await p.$eval('#f-sea', (e) => e.value)) === ''), vacio ? 'mostrado' : 'combinación con resultados');
 await p.close();
+p = await page(1440, 900); await goto(p, '#/lugares/' + ficha('Alubarna')); await p.waitForSelector('svg.msvg .c-pin'); await sleep(1600);
+const nr = await p.evaluate(() => { const e = document.getElementById('c-near'); return { vis: !e.hidden, t: e.textContent, btn: e.querySelectorAll('button').length }; });
+check('Lugares: la ficha breve muestra dónde está el lugar (dentro de, cerca) y la confianza de su posición', nr.vis && /Dentro de/.test(nr.t) && /Posición/.test(nr.t) && nr.btn >= 2, nr.t.slice(0, 150));
+await p.close();
 p = await page(); await goto(p, '#/lugares?vista=precisa&capa=mares,rejilla'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
 check('URL compartible: vista y capas se restauran al abrir el enlace', (await vis('.lyr-rejilla')) && !(await vis('#route-bar')) && (await p.$eval('#s-precisa', (e) => e.getAttribute('aria-pressed'))) === 'true');
 await p.close();

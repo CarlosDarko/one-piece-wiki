@@ -313,6 +313,11 @@ Ejemplos corregidos: ${c.ejemplos.join('; ')}.
     if (s < 0) for (const [re, k] of SEA_RULES) if (re.test(list[i].id)) { s = k; break; }
     return [i, s < 0 ? 10 : s];
   });
+  // contención: «Región»/«Localización» de la infobox nombra el lugar que contiene a este (palacio → isla, bar → ciudad). Sirve para
+  // heredar el mar de quien no lo tiene y para dibujar cada lugar junto al que lo contiene.
+  const placeIdx = new Map(places.map((p, k) => [p[0], k])); const placeParent = new Map();
+  for (const [i] of places) for (const [r, j] of relsOf[i]) if (r === relRegion && j !== i && placeIdx.has(j) && !placeParent.has(i)) placeParent.set(i, j);
+  for (let pass = 0; pass < 3; pass++) for (const row of places) { if (row[1] !== 10) continue; const pa = placeParent.get(row[0]); if (pa === undefined) continue; const ps = places[placeIdx.get(pa)][1]; if (ps !== 10) row[1] = ps; }
   // orden de los arcos (canon) y asignación de cada lugar al arco donde aparece por primera vez
   const orderedArcs = [...sagas.flatMap((s) => arcsAll.filter((a) => a.saga === s.i && !a.nc).sort((x, y) => x.rg[0] - y.rg[0])), ...arcsAll.filter((a) => !a.nc && a.saga === null && a.rg).sort((x, y) => x.rg[0] - y.rg[0])];
   const sagaPos = (a) => sagas.findIndex((s) => s.i === a.saga);
@@ -328,7 +333,7 @@ Ejemplos corregidos: ${c.ejemplos.join('; ')}.
     const pick = cands.sort((x, y) => y.sc - x.sc)[0]?.i;
     if (pick !== undefined && route[route.length - 1]?.p !== pick) route.push({ a: p, p: pick });
   });
-  emit('places', { seas: SEAS, kinds: KINDS, p: placeRows, arcs: orderedArcs.map((a) => ({ i: a.i, n: a.n, s: sagaPos(a) })), sagas: sagas.map((s) => ({ i: s.i, n: s.n })), route });
+  emit('places', { seas: SEAS, kinds: KINDS, p: placeRows, par: [...placeParent].filter(([i, j]) => placeRows.some((r) => r[0] === j) && places[placeIdx.get(i)][1] === places[placeIdx.get(j)][1]), arcs: orderedArcs.map((a) => ({ i: a.i, n: a.n, s: sagaPos(a) })), sagas: sagas.map((s) => ({ i: s.i, n: s.n })), route });
   // recompensas: ranking de personajes por la mayor recompensa que indica su infobox
   const bounty = list.map((e, i) => [i, e]).filter(([i]) => tipo(i) === 'personaje' && !list[i].id.includes('/')).map(([i, e]) => { const v = field(e, 'recompensa'); if (!v) return null; const nums = [...v.matchAll(/\d{1,3}(?:\.\d{3})+/g)].map((m) => +m[0].replace(/\./g, '')).filter((n) => n >= 1e6); return nums.length ? [i, Math.max(...nums)] : null; }).filter(Boolean).sort((a, b) => b[1] - a[1]).slice(0, 300);
   emit('rank', { bounty });
