@@ -96,6 +96,32 @@ await p.keyboard.press('Enter'); await sleep(1600); check('Carta: elegir un luga
 await p.click('#v-list'); await sleep(500); check('Mapa: el modo lista accesible muestra los lugares por mar', (await p.$$eval('.pl-sea', (a) => a.length)) >= 3 && (await p.$$eval('.pl-sea li', (a) => a.length)) > 100);
 await p.close();
 
+// ---------- Los lugares: estilo Precisa, capas, minimapa, vacío y teclado ----------
+p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
+const vis = (sel) => p.evaluate((q) => { const e = document.querySelector(q); return !!e && getComputedStyle(e).display !== 'none'; }, sel);
+check('Lugares: conmutador Náutica/Precisa, capas y minimapa presentes', (await p.$$eval('.c-style button', (a) => a.length)) === 2 && (await p.$$eval('[data-lay]', (a) => a.length)) === 6 && (await vis('#c-mini')));
+await p.click('#s-precisa'); await sleep(500);
+check('Precisa: activa la rejilla, oculta los adornos y lo guarda en la URL', (await vis('.lyr-rejilla')) && !(await vis('.lyr-adorno')) && (await hash(p)).includes('vista=precisa'), await hash(p));
+await p.click('#c-lay summary'); await p.evaluate(() => { const c = document.querySelector('[data-lay="ruta"]'); c.click(); }); await sleep(400);
+check('Capas: ocultar «ruta» quita la ruta, el barco y la barra, y queda en la URL', !(await p.evaluate(() => getComputedStyle(document.querySelector('.route')).display !== 'none')) && !(await vis('#route-bar')) && /capa=/.test(await hash(p)), await hash(p));
+await p.click('#lay-reset'); await sleep(300); check('Capas: restablecer devuelve la ruta', await vis('#route-bar'));
+const aprox = await p.$$eval('.c-pin .c-approx', (a) => a.length); await p.evaluate(() => document.querySelector('.gtools [data-z=in]').click()); await p.evaluate(() => document.querySelector('.gtools [data-z=in]').click()); await sleep(900);
+const aprox2 = await p.$$eval('.c-pin .c-approx', (a) => a.length), tit = await p.$$eval('.c-pin title', (a) => a.filter((x) => x.textContent.includes('posición aproximada')).length);
+check('Precisa: las islas con posición aproximada se señalan (anillo y tooltip)', aprox + aprox2 > 0 && tit > 0, aprox + ' / ' + aprox2 + ' / ' + tit);
+const mv0 = await p.$eval('#mini-view', (e) => +e.getAttribute('width')); await p.mouse.click(0, 0).catch(() => {});
+const mb = await p.$eval('#c-mini', (e) => { const b = e.getBoundingClientRect(); return [b.left + b.width * 0.2, b.top + b.height * 0.8]; }); const v0 = await p.$eval('#mini-view', (e) => e.getAttribute('x') + ',' + e.getAttribute('y'));
+await p.mouse.click(mb[0], mb[1]); await sleep(500); const v1 = await p.$eval('#mini-view', (e) => e.getAttribute('x') + ',' + e.getAttribute('y'));
+check('Minimapa: el rectángulo refleja la vista y al pulsar mueve el mapa', mv0 > 0 && v0 !== v1, mv0 + ' ' + v0 + ' → ' + v1);
+await p.evaluate(() => document.querySelector('svg.msvg').focus()); const t0 = await p.$eval('svg.msvg g', (e) => e.getAttribute('transform')); await p.keyboard.press('ArrowRight'); await p.keyboard.press('+'); await sleep(900);
+check('Teclado: flechas y + mueven y acercan la carta', t0 !== (await p.$eval('svg.msvg g', (e) => e.getAttribute('transform'))));
+await p.select('#f-sea', '7'); await p.select('#f-kind', '3'); await sleep(500);
+const vacio = await vis('#c-empty'); if (vacio) { await p.click('#c-clear'); await sleep(400); }
+check('Filtros sin resultados: aviso con «Quitar filtros» que restablece', !vacio || (!(await vis('#c-empty')) && (await p.$eval('#f-sea', (e) => e.value)) === ''), vacio ? 'mostrado' : 'combinación con resultados');
+await p.close();
+p = await page(); await goto(p, '#/lugares?vista=precisa&capa=mares,rejilla'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
+check('URL compartible: vista y capas se restauran al abrir el enlace', (await vis('.lyr-rejilla')) && !(await vis('#route-bar')) && (await p.$eval('#s-precisa', (e) => e.getAttribute('aria-pressed'))) === 'true');
+await p.close();
+
 // ---------- leyenda de la carta ----------
 {
   p = await page(2560, 1080); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(900);

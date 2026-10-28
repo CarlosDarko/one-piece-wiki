@@ -9,7 +9,10 @@ import type { View } from './view';
 
 interface PlacesData { seas: string[]; kinds: string[]; p: [number, number, number, number, number][]; arcs: { i: number; n: string; s: number }[]; sagas: { i: number; n: string }[]; route: { a: number; p: number }[] }
 interface Region { x: number; y: number; w: number; h: number }
-interface Marker { i: number; sea: number; kind: number; ch: number; ap: number; x: number; y: number }
+interface Marker { i: number; sea: number; kind: number; ch: number; ap: number; x: number; y: number; conf: number }
+const LAYERS: [string, string][] = [['ruta', 'Ruta del viaje y barco'], ['nombres', 'Nombres de las islas'], ['mares', 'Mares y nombres de los mares'], ['linea', 'Red Line y Calm Belt'], ['adorno', 'Monstruos y adornos'], ['rejilla', 'Rejilla y escala']];
+const DEF_LAYERS: Record<string, string[]> = { carta: ['ruta', 'nombres', 'mares', 'linea', 'adorno'], precisa: ['ruta', 'nombres', 'mares', 'linea', 'rejilla'] };
+const CONF_TXT = ['baja: la wiki no sitúa el lugar con certeza; se agrupa donde corresponde', 'media: se conoce el mar y el orden de aparición, no la posición exacta', 'alta: parada de la ruta, con orden verificado en los capítulos'];
 const NS = 'http://www.w3.org/2000/svg', W = 1000, OY = 46, H = 782;
 const REGIONS: Region[] = [
   { x: 540, y: 20, w: 440, h: 185 }, { x: 20, y: 434, w: 440, h: 191 }, { x: 20, y: 20, w: 290, h: 185 }, { x: 540, y: 434, w: 440, h: 191 }, { x: 20, y: 250, w: 380, h: 138 }, { x: 600, y: 250, w: 380, h: 138 },
@@ -51,7 +54,7 @@ const iconFor = (kind: number, sea: number, i: number) => { if (kind === 0) { co
 export class CartaView implements View {
   private root!: HTMLElement; private svg!: SVGSVGElement; private content!: SVGGElement; private layer!: SVGGElement; private routeG!: SVGGElement; private data!: PlacesData;
   private markers: Marker[] = []; private byI = new Map<number, Marker>(); private zoomB!: ZoomBehavior<SVGSVGElement, unknown>; private z: ZoomTransform = zoomIdentity; private s0 = 1; private bx = 0; private by = 0;
-  private bg!: SVGElement; private bleed: SVGPathElement | null = null; private shipG!: SVGGElement; private selected: number | null = null; private raf = 0; private ro?: ResizeObserver; private f = { sea: '', saga: '', kind: '' }; private listMode = false; private disposeSearch: (() => void) | null = null;
+  private bg!: SVGElement; private bleed: SVGPathElement | null = null; private shipG!: SVGGElement; private selected: number | null = null; private raf = 0; private ro?: ResizeObserver; private f = { sea: '', saga: '', kind: '' }; private precise = false; private layers = new Set<string>(DEF_LAYERS.carta); private mini!: SVGSVGElement; private miniView!: SVGRectElement; private listMode = false; private disposeSearch: (() => void) | null = null;
   private routePath: SVGPathElement | null = null; private routeLen = 0; private cum: number[] = []; private step = -1; private playing = false; private timer = 0; private ship!: SVGGElement; private shipLen = 0;
   canExpand = false;
 
@@ -59,25 +62,29 @@ export class CartaView implements View {
     document.body.classList.add('carta-on'); const root = document.createElement('div'); root.className = 'map-wrap carta'; host.append(root); this.root = root;
     root.innerHTML = '<p class="loading">Desplegando la carta…</p>';
     [this.data] = await Promise.all([loadData<PlacesData>('places'), ensureIndex(), ensureImgs()]);
-    const q = parseHash().q; this.f = { sea: q.get('m') ?? '', saga: q.get('s') ?? '', kind: q.get('k') ?? '' }; this.listMode = q.get('l') === '1';
+    const q = parseHash().q; this.f = { sea: q.get('m') ?? '', saga: q.get('s') ?? '', kind: q.get('k') ?? '' }; this.listMode = q.get('l') === '1'; this.precise = q.get('vista') === 'precisa'; this.layers = new Set(q.has('capa') ? q.get('capa')!.split(',').filter((x) => LAYERS.some((l) => l[0] === x)) : DEF_LAYERS[this.precise ? 'precisa' : 'carta']);
     this.layoutMarkers(); const D = this.data;
     root.innerHTML = `<h1 class="sr">Los lugares: carta náutica del mundo de One Piece</h1><div class="map-bar" id="map-bar" role="search"><div class="picker"><input id="pq" type="search" placeholder="Buscar una isla o región…" aria-label="Buscar un lugar" autocomplete="off"><div id="pres" class="results" role="listbox" hidden></div></div>
       <label class="sel"><span>Mar</span><select id="f-sea"><option value="">Todos</option>${D.seas.map((s, k) => `<option value="${k}">${esc(SEA_NAMES[k] ?? s)}</option>`).join('')}</select></label>
       <label class="sel"><span>Saga</span><select id="f-saga"><option value="">Todas</option>${D.sagas.map((s, k) => `<option value="${k}">${esc(s.n.replace(/^Saga /, ''))}</option>`).join('')}</select></label>
       <label class="sel"><span>Tipo</span><select id="f-kind"><option value="">Todos</option>${D.kinds.map((s, k) => `<option value="${k}">${esc(s)}</option>`).join('')}</select></label>
       <button class="filt-btn" id="filt-btn" aria-expanded="false" aria-controls="map-bar">Filtros ▾</button><span class="count" id="m-count" role="status" aria-live="polite"></span>
-      <div class="seg" role="group" aria-label="Forma de ver los lugares"><button id="v-map" aria-pressed="true">Carta</button><button id="v-list" aria-pressed="false">Lista</button></div></div>
-      <div class="map-stage"><svg class="msvg" role="img" aria-label="Carta náutica del mundo de One Piece con sus lugares. Hay un modo lista accesible."></svg>
+      <div class="seg" role="group" aria-label="Forma de ver los lugares"><button id="v-map" aria-pressed="true">Mapa</button><button id="v-list" aria-pressed="false">Lista</button></div></div>
+      <div class="map-stage"><svg class="msvg" role="group" tabindex="0" aria-label="Mapa del mundo de One Piece con sus lugares. Con el teclado: flechas para moverte, más y menos para el zoom, cero para verlo todo. Hay un modo lista accesible."></svg>
+        <div class="c-top"><div class="seg c-style" role="group" aria-label="Estilo del mapa"><button type="button" id="s-carta" aria-pressed="true" title="Carta náutica ilustrada">Náutica</button><button type="button" id="s-precisa" aria-pressed="false" title="Vista precisa: rejilla, escala y posición aproximada señalada">Precisa</button></div><details class="c-lay" id="c-lay"><summary>Capas</summary><div class="c-lay-b">${LAYERS.map(([k, t]) => `<label><input type="checkbox" data-lay="${k}"> ${t}</label>`).join('')}<button type="button" class="linkish" id="lay-reset">Restablecer capas</button></div></details></div>
+        <div class="c-empty" id="c-empty" hidden><p><b>Ningún lugar cumple los filtros.</b></p><button class="btn" id="c-clear" type="button">Quitar filtros</button></div>
+        <svg class="c-mini" id="c-mini" viewBox="0 0 ${W} ${H}" aria-hidden="true"></svg>
         <div class="gtools" role="toolbar" aria-label="Zoom de la carta"><button data-z="in" aria-label="Acercar">＋</button><button data-z="out" aria-label="Alejar">－</button><button data-z="fit" aria-label="Ver toda la carta" title="Ver todo">⤢</button></div>
         <div class="route-bar" id="route-bar"><button class="btn" id="r-play" aria-label="Reproducir la ruta del viaje">▶ Ruta del viaje</button><div class="r-ctl" hidden><button id="r-prev" aria-label="Arco anterior">⏮</button><button id="r-pp" aria-label="Pausar o reproducir">⏸</button><button id="r-next" aria-label="Parada siguiente">⏭</button><button id="r-reset" aria-label="Reiniciar la ruta" title="Reiniciar">↺</button><label class="r-sp"><span class="sr">Velocidad</span><select id="r-speed" aria-label="Velocidad de la animación"><option value="0.5">×0,5</option><option value="1" selected>×1</option><option value="2">×2</option><option value="4">×4</option></select></label></div><ol class="r-stops" id="r-stops" aria-label="Paradas del viaje: pulsa una para saltar a ella" hidden></ol><div class="r-info" id="r-info" role="status" aria-live="polite">Sigue el rumbo de los Sombreros de Paja de isla en isla, arco a arco.</div></div>
         <details class="c-leg" id="c-leg"><summary title="Qué significa cada trazo y marcador">Leyenda</summary><div class="c-leg-b"><ul><li><svg viewBox="0 0 28 16" aria-hidden="true"><path d="M2 8 H26" stroke="#b3402e" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="2 5"/></svg><span><b>Ruta del viaje</b> (31 paradas)</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><path d="M2 8 H26" stroke="#9c2f1f" stroke-width="3.4" stroke-linecap="round"/></svg><span><b>Tramo recorrido</b> por el barco</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><circle cx="14" cy="8" r="7" fill="#c9a21c" stroke="#3a2813" stroke-width="1.4"/><text x="14" y="11.5" text-anchor="middle" font-size="9" font-weight="800" fill="#fff">7</text></svg><span><b>Parada 1-31</b>; color = saga <span class="c-sagas" id="c-sagas"></span></span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><circle cx="14" cy="8" r="7.5" fill="#f3e4b4" stroke="#3a2813" stroke-width="1.6"/><text x="14" y="11.5" text-anchor="middle" font-size="9" font-weight="800" fill="#3a2813">12</text></svg><span><b>Varios lugares</b>: púlsalo para acercar</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><rect x="1" y="3" width="26" height="10" rx="3" fill="#7fb3ad" fill-opacity=".5" stroke="#3a2813" stroke-width="1"/><path d="M5 13 L11 3 M11 13 L17 3 M17 13 L23 3" stroke="#3a2813" stroke-opacity=".4"/></svg><span><b>Calm Belt</b> (bandas rayadas)</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><rect x="9" y="0" width="10" height="16" fill="#cf9a62" stroke="#3a2813" stroke-width="1.1"/><path d="M10 14 L14 5 L18 14Z" fill="#c2623f" stroke="#3a2813" stroke-width=".8"/></svg><span><b>Red Line</b> (con Mary Geoise)</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><rect x="1" y="3" width="26" height="10" rx="4" fill="#4f93a8" fill-opacity=".4" stroke="#3a2813" stroke-width="1" stroke-dasharray="4 2"/></svg><span><b>Mares</b> (trazo discontinuo)</span></li><li><svg viewBox="0 0 28 16" aria-hidden="true"><path d="M2 11 q4 -8 8 0 M12 11 q4 -8 8 0" stroke="#5b3e8a" fill="none" stroke-width="1.4"/></svg><span><b>Tormentas</b> (Nuevo Mundo) y nubes</span></li><li><span class="c-ic" aria-hidden="true">🌴🏘🏰</span><span><b>Iconos</b>: isla, ciudad, reino…</span></li></ul></div></details>
         <div class="map-note"><b>Carta esquemática.</b> No es un mapa geográfico real: cada lugar se coloca en el mar que indican sus categorías en la wiki y, dentro de él, de izquierda a derecha según el capítulo en que aparece.</div></div>
       <div class="place-list" id="place-list" hidden></div>`;
     (root.querySelector('#f-sea') as HTMLSelectElement).value = this.f.sea; (root.querySelector('#f-saga') as HTMLSelectElement).value = this.f.saga; (root.querySelector('#f-kind') as HTMLSelectElement).value = this.f.kind;
-    this.svg = root.querySelector('svg')!; this.content = el('g', {}, this.svg) as SVGGElement; this.drawChart(); this.routeG = el('g', { class: 'route' }, this.content) as SVGGElement; this.layer = el('g', { class: 'mk' }, this.content) as SVGGElement; this.shipG = el('g', { class: 'shipg' }, this.content) as SVGGElement;
+    this.svg = root.querySelector('.msvg') as SVGSVGElement; this.content = el('g', {}, this.svg) as SVGGElement; this.drawChart(); this.routeG = el('g', { class: 'route' }, this.content) as SVGGElement; this.layer = el('g', { class: 'mk' }, this.content) as SVGGElement; this.shipG = el('g', { class: 'shipg' }, this.content) as SVGGElement;
     this.zoomB = zoom<SVGSVGElement, unknown>().scaleExtent([0.9, 24]).on('zoom', (e) => { this.z = e.transform; this.applyTransform(); this.schedule(); }); select(this.svg).call(this.zoomB).on('dblclick.zoom', null);
     this.ro = new ResizeObserver(() => { this.base(); this.applyTransform(); this.schedule(); }); this.ro.observe(this.svg);
-    this.base(); this.applyTransform(); this.drawRoute(); this.draw(); this.updateCount();
+    this.base(); this.applyTransform(); this.drawRoute(); this.initMini(); this.syncUi(); this.draw(); this.updateCount();
+    this.initControls();
     root.querySelector('.gtools')!.addEventListener('click', (e) => { const z = (e.target as HTMLElement).closest<HTMLElement>('[data-z]')?.dataset.z; if (z === 'in') this.zoomBy(1.5); else if (z === 'out') this.zoomBy(1 / 1.5); else if (z === 'fit') this.fitRect(0, 0, W, H); });
     for (const [id, key] of [['f-sea', 'sea'], ['f-saga', 'saga'], ['f-kind', 'kind']] as const) root.querySelector('#' + id)!.addEventListener('change', (e) => { this.f[key] = (e.target as HTMLSelectElement).value; setParams({ m: this.f.sea, s: this.f.saga, k: this.f.kind }); this.onFilter(key); });
     root.querySelector('#filt-btn')!.addEventListener('click', (e) => { const b = root.querySelector('#map-bar')!, o = !b.classList.contains('open'); b.classList.toggle('open', o); (e.currentTarget as HTMLElement).setAttribute('aria-expanded', String(o)); });
@@ -99,12 +106,12 @@ export class CartaView implements View {
 
   // ---------- colocación determinista: por mar, de izquierda a derecha según el capítulo de primera aparición ----------
   private layoutMarkers() {
-    const by = new Map<number, [number, number, number, number, number][]>(); for (const r of this.data.p) (by.get(r[1]) ?? by.set(r[1], []).get(r[1])!).push(r);
+    const rs = new Set(this.data.route.map((r) => r.p)); const by = new Map<number, [number, number, number, number, number][]>(); for (const r of this.data.p) (by.get(r[1]) ?? by.set(r[1], []).get(r[1])!).push(r);
     for (const [s, rows] of by) {
       const r = REGIONS[s]!; const n = rows.length; rows.sort((a, b) => (a[3] || 1e6 + hash(a[0]) * 1e5) - (b[3] || 1e6 + hash(b[0]) * 1e5));
       const pad = 12, padTop = s === 7 ? 3 : s === 6 ? 16 : NOTES[s] ? 38 : 32, padLeft = s === 7 ? 150 : pad; const w = r.w - padLeft - pad, h = r.h - padTop - pad;
       const cols = Math.max(1, Math.ceil(Math.sqrt(n * (w / Math.max(h, 1))))), nrows = Math.ceil(n / cols), cw = w / cols, ch = h / nrows;
-      rows.forEach(([i, , kind, chap, ap], k) => { const cx = Math.floor(k / nrows), cy = k % nrows; this.markers.push({ i, sea: s, kind, ch: chap, ap, x: r.x + padLeft + (cx + 0.5 + (hash(i * 7) - 0.5) * 0.3) * cw, y: OY + r.y + padTop + (cy + 0.5 + (hash(i * 13) - 0.5) * 0.4) * ch }); });
+      rows.forEach(([i, , kind, chap, ap], k) => { const cx = Math.floor(k / nrows), cy = k % nrows; this.markers.push({ i, sea: s, kind, ch: chap, ap, conf: rs.has(i) ? 2 : s !== 10 && chap > 0 ? 1 : 0, x: r.x + padLeft + (cx + 0.5 + (hash(i * 7) - 0.5) * 0.3) * cw, y: OY + r.y + padTop + (cy + 0.5 + (hash(i * 13) - 0.5) * 0.4) * ch }); });
     }
     for (const m of this.markers) this.byI.set(m.i, m);
   }
@@ -117,22 +124,26 @@ export class CartaView implements View {
       <pattern id="storm" width="34" height="30" patternUnits="userSpaceOnUse"><path d="M3 9 q7 -8 14 0 M18 24 q7 -8 14 0 M20 7 l-4 7 h5 l-4 7" fill="none" stroke="#5b3e8a" stroke-opacity=".5" stroke-width="1.1"/></pattern>
       <pattern id="mts" width="20" height="16" patternUnits="userSpaceOnUse"><path d="M1 14 L8 3 L11 8 L14 5 L19 14 Z" fill="#c2623f" fill-opacity=".85" stroke="${INK}" stroke-width="1.1" stroke-linejoin="round"/></pattern>`;
     el('rect', { width: W, height: H, fill: PAPER }, c); this.bg = el('image', { width: W, height: H, preserveAspectRatio: 'none' }, c); void this.bakePaper();
-    const g = el('g', { transform: `translate(0 ${OY})` }, c);
+    const base = el('g', { transform: `translate(0 ${OY})` }, c); let g: SVGElement = base; const grp = (n: string) => { g = el('g', { class: 'lyr lyr-' + n }, base); };
+    grp('mares');
     // aguas: manchas de acuarela teñidas por mar
     const wash = (r: Region, fill: string, op: number, rx = 18) => { el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx, fill, 'fill-opacity': op }, g); el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx, fill: 'url(#wv)' }, g); el('rect', { x: r.x, y: r.y, width: r.w, height: r.h, rx, fill: 'none', stroke: INK, 'stroke-opacity': 0.55, 'stroke-width': 1.3, 'stroke-dasharray': '7 4 1.5 4' }, g); };
     wash(REGIONS[0]!, '#4f93a8', 0.38); wash(REGIONS[1]!, '#4a86a0', 0.4); wash(REGIONS[2]!, '#5a8fb0', 0.38); wash(REGIONS[3]!, '#4f9a94', 0.38); wash(REGIONS[4]!, '#3a7fa3', 0.45); wash(REGIONS[5]!, '#6b5aa6', 0.38); wash(REGIONS[9]!, '#2f6f98', 0.5, 10);
     el('rect', { x: 600, y: 250, width: 380, height: 138, rx: 18, fill: 'url(#storm)' }, g);
     wash(REGIONS[8]!, '#cfe3ee', 0.55); for (const [x, y, s] of [[345, 62, 1], [420, 140, 0.8], [372, 186, 0.9], [338, 130, 0.7], [440, 60, 0.7]] as const) el('path', { d: `M${x - 28 * s} ${y} q-8 -18 12 -20 q6 -16 26 -8 q22 -6 24 12 q16 2 10 16 z`, fill: '#fbf3dc', stroke: INK, 'stroke-width': 1, 'stroke-opacity': 0.7 }, g);
     wash(REGIONS[10]!, '#9a8d72', 0.4, 10);
+    grp('linea');
     for (const y of [210, 400]) { el('rect', { x: 20, y, width: 960, height: 28, fill: '#7fb3ad', 'fill-opacity': 0.45 }, g); el('rect', { x: 20, y, width: 960, height: 28, fill: 'url(#calm)' }, g); el('rect', { x: 20, y, width: 960, height: 28, fill: 'none', stroke: INK, 'stroke-opacity': 0.55, 'stroke-width': 1.2 }, g); }
     // Red Line: cordillera con picos rojos, Mary Geoise coronándola
     el('rect', { x: 470, y: 20, width: 60, height: 600, fill: '#cf9a62', 'fill-opacity': 0.7, stroke: INK, 'stroke-width': 1.6 }, g); el('rect', { x: 470, y: 20, width: 60, height: 600, fill: 'url(#mts)' }, g);
     el('path', { d: 'M500 4 l-14 12 v10 h28 v-10 z M486 16 l6 -8 l8 7 l8 -7 l6 8', fill: '#f4e4b4', stroke: INK, 'stroke-width': 1.3, 'stroke-linejoin': 'round' }, g);
     const lab = (t: string, x: number, y: number, size: number, anchor = 'middle', rot = 0, fill = INK, ls = 0.2) => { const e = el('text', { x, y, 'font-size': size, 'text-anchor': anchor, fill, 'font-style': 'italic', 'font-family': SERIF, 'letter-spacing': `${ls}em`, transform: rot ? `rotate(${rot} ${x} ${y})` : '' }, g); e.textContent = t; return e; };
     lab('R E D   L I N E', 500, 330, 13, 'middle', -90, INK, 0.35).setAttribute('font-weight', '700');
+    grp('mares');
     REGIONS.forEach((r, k) => { if (k === 6 || k === 7 || k === 10) return; const ax = k === 9 ? r.x + 38 : r.x + r.w / 2; lab((SEA_NAMES[k] ?? '').toUpperCase(), ax, r.y + (k === 9 ? 22 : 23), k === 4 || k === 5 ? 18 : k === 9 ? 12 : 15, 'middle', 0, '#2c4254', k === 9 ? 0.1 : 0.3).setAttribute('font-weight', '700'); if (NOTES[k] && k !== 9) lab(NOTES[k]!, r.x + r.w / 2, r.y + 38, 10, 'middle', 0, '#4a3b25', 0.05); });
     lab('CALM BELT', 120, 229, 11, 'middle', 0, '#274a46', 0.4); lab('CALM BELT', 120, 419, 11, 'middle', 0, '#274a46', 0.4); lab('M A R E S   S I N   U B I C A R', 565, 658, 11, 'middle', 0, '#4a3b25', 0.2);
     // monstruos marinos y barcos de adorno
+    grp('adorno');
     const art = (d: string, x: number, y: number, s: number, fill = 'none', sw = 1.6, op = 0.8) => el('path', { d, transform: `translate(${x} ${y}) scale(${s})`, fill, stroke: INK, 'stroke-width': sw / s, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: op }, g);
     art('M0 0 q12 -34 30 -18 q14 12 28 -6 q14 -14 26 4 M84 -20 q8 -6 14 2 M0 0 q10 14 26 8 q14 -6 26 6 q14 10 28 -2', 52, 232, 1.5);
     art('M0 0 q-8 -22 6 -34 q10 -8 16 4 q4 12 -4 22 M22 -30 q8 -8 16 -2 M0 0 q20 -4 40 6', 760, 312, 1.4, '#c9d9c4', 1.5, 0.6);
@@ -141,6 +152,7 @@ export class CartaView implements View {
     const ship = (x: number, y: number, s: number) => { const e = el('g', { transform: `translate(${x} ${y}) scale(${s})`, opacity: 0.7 }, g); e.innerHTML = `<path d="M-14 4 q14 12 28 0 l-3 -6 h-22 z" fill="#d8bd86" stroke="${INK}" stroke-width="1"/><path d="M0 -2 V-26 M0 -24 q10 6 0 18 M-1 -22 q-9 6 -1 16" fill="#f6ecd0" stroke="${INK}" stroke-width="1"/>`; };
     ship(300, 560, 1.5); ship(780, 90, 1.3); ship(90, 330, 1.2); ship(910, 500, 1.3); ship(640, 330, 1.1);
     // relieve de la Red Line: luz a la izquierda, sombra a la derecha, crestas grabadas y sombra proyectada sobre el mar
+    grp('linea');
     const gd = el('defs', {}, c); gd.innerHTML = `<linearGradient id="relief" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".32"/><stop offset=".5" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#3a2813" stop-opacity=".5"/></linearGradient><linearGradient id="cast" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#3a2813" stop-opacity=".32"/><stop offset="1" stop-color="#3a2813" stop-opacity="0"/></linearGradient>`;
     el('rect', { x: 470, y: 20, width: 60, height: 600, fill: 'url(#relief)', 'pointer-events': 'none' }, g); el('rect', { x: 530, y: 20, width: 20, height: 600, fill: 'url(#cast)', 'pointer-events': 'none' }, g);
     let ridge = 'M474 30'; for (let y = 40; y < 620; y += 14) ridge += ` l${hash(y) > 0.5 ? 5 : -5} 14`; el('path', { d: ridge, fill: 'none', stroke: INK, 'stroke-width': 0.8, 'stroke-opacity': 0.55, transform: 'translate(22 0)' }, g);
@@ -148,11 +160,15 @@ export class CartaView implements View {
     const corner = (x: number, y: number, sx: number, sy: number) => { const e = el('g', { transform: `translate(${x} ${y}) scale(${sx} ${sy})` }, c); e.innerHTML = `<path d="M0 0 h46 M0 0 v46 M7 7 h30 q-14 3 -18 12 q-3 -9 -12 -12 z M7 7 v30 q3 -14 12 -18 q-9 -3 -12 -12z" fill="none" stroke="${INK}" stroke-width="1.5" stroke-linecap="round"/><circle cx="7" cy="7" r="3.2" fill="#b3402e" stroke="${INK}" stroke-width="1"/><path d="M22 7 q6 -6 12 0 q-6 6 -12 0z M7 22 q-6 6 0 12 q6 -6 0 -12z" fill="#e8c46a" stroke="${INK}" stroke-width="1"/>`; };
     corner(10, 10, 1, 1); corner(W - 10, 10, -1, 1); corner(10, H - 10, 1, -1); corner(W - 10, H - 10, -1, -1);
     // monstruos: ojos, púas y ventosas grabadas
+    grp('adorno');
     const dots = (pts: number[][], r: number) => pts.forEach(([x, y]) => el('circle', { cx: x, cy: y, r, fill: INK, opacity: 0.55 }, g));
     dots([[78, 218], [96, 214], [114, 218]], 1.6); el('circle', { cx: 118, cy: 206, r: 3.2, fill: '#f6ecd0', stroke: INK, 'stroke-width': 1 }, g); el('circle', { cx: 118, cy: 206, r: 1.2, fill: INK }, g);
     dots([[130, 566], [138, 556], [146, 546], [154, 538], [152, 574], [160, 566]], 1.8); el('circle', { cx: 160, cy: 540, r: 3, fill: '#f6ecd0', stroke: INK, 'stroke-width': 1 }, g); el('circle', { cx: 160, cy: 540, r: 1.1, fill: INK }, g);
     for (let k = 0; k < 7; k++) el('path', { d: `M${700 + k * 9} ${338 - (k % 2) * 3} l2 -7`, stroke: INK, 'stroke-width': 1.2, opacity: 0.6 }, g);
     for (let k = 0; k < 9; k++) el('path', { d: `M${646 + k * 9} ${566 - (k % 3) * 2} l3 5`, stroke: INK, 'stroke-width': 1, opacity: 0.45 }, g);
+    // rejilla (vista precisa): cuadrícula de 100 y letras/números de lectura
+    grp('rejilla'); for (let x = 100; x < W; x += 100) el('path', { d: `M${x} 14 V${H - 14}`, stroke: INK, 'stroke-opacity': 0.22, 'stroke-width': 0.8, 'stroke-dasharray': '3 5' }, g); for (let y = 100; y < H - OY; y += 100) el('path', { d: `M14 ${y} H${W - 14}`, stroke: INK, 'stroke-opacity': 0.22, 'stroke-width': 0.8, 'stroke-dasharray': '3 5' }, g);
+    for (let k = 0; k < 10; k++) { const t = el('text', { x: k * 100 + 50, y: 11, 'text-anchor': 'middle', 'font-size': 8, fill: INK, 'font-family': SERIF }, g); t.textContent = 'ABCDEFGHIJ'[k]!; } for (let k = 0; k < 8; k++) { const t = el('text', { x: 4, y: k * 100 + 54, 'font-size': 8, fill: INK, 'font-family': SERIF }, g); t.textContent = String(k + 1); }
     // marco, graduación, cartela y rosa de los vientos
     const fr = el('g', {}, c); el('rect', { x: 7, y: 7, width: W - 14, height: H - 14, fill: 'none', stroke: INK, 'stroke-width': 2.4 }, fr); el('rect', { x: 13, y: 13, width: W - 26, height: H - 26, fill: 'none', stroke: INK, 'stroke-width': 0.9 }, fr);
     for (let x = 20; x < W - 18; x += 20) el('path', { d: `M${x} 13 v${x % 100 === 0 ? 8 : 4} M${x} ${H - 13} v-${x % 100 === 0 ? 8 : 4}`, stroke: INK, 'stroke-width': 0.9 }, fr);
@@ -172,7 +188,7 @@ export class CartaView implements View {
 
   // ---------- cámara ----------
   private base() { const w = this.svg.clientWidth || 900, h = this.svg.clientHeight || 600; const top = w < 820 ? 4 : 6, bottom = w < 820 ? 120 : 70; this.s0 = Math.min(w / W, Math.max(120, h - top - bottom) / H); this.bx = (w - W * this.s0) / 2; this.by = top + (h - top - bottom - H * this.s0) / 2; }
-  private applyTransform() { this.content.setAttribute('transform', `translate(${this.z.x},${this.z.y}) scale(${this.z.k}) translate(${this.bx},${this.by}) scale(${this.s0})`); }
+  private applyTransform() { this.content.setAttribute('transform', `translate(${this.z.x},${this.z.y}) scale(${this.z.k}) translate(${this.bx},${this.by}) scale(${this.s0})`); this.updateMini(); }
   private schedule() { if (!this.raf) this.raf = requestAnimationFrame(() => { this.raf = 0; this.draw(); }); }
   private zoomBy(f: number) { const w = this.svg.clientWidth / 2, h = this.svg.clientHeight / 2, k = Math.max(0.9, Math.min(24, this.z.k * f)); this.tween(zoomIdentity.translate(w - ((w - this.z.x) / this.z.k) * k, h - ((h - this.z.y) / this.z.k) * k).scale(k)); }
   private fitRect(x: number, y: number, w: number, h: number) { const vw = this.svg.clientWidth, vh = this.svg.clientHeight; const sx = x * this.s0 + this.bx, sy = y * this.s0 + this.by, sw = w * this.s0, sh = h * this.s0; const k = Math.max(0.9, Math.min(24, 0.94 * Math.min(vw / sw, vh / sh))); this.tween(zoomIdentity.translate(vw / 2 - (sx + sw / 2) * k, vh / 2 - (sy + sh / 2) * k).scale(k)); }
@@ -182,7 +198,7 @@ export class CartaView implements View {
   // ---------- filtros ----------
   private passes(m: Marker) { const { sea, saga, kind } = this.f; if (sea !== '' && m.sea !== +sea) return false; if (kind !== '' && m.kind !== +kind) return false; if (saga !== '' && !(m.ap >= 0 && this.data.arcs[m.ap]?.s === +saga)) return false; return true; }
   private visibleMarkers() { return this.markers.filter((m) => this.passes(m)); }
-  private updateCount() { const n = this.visibleMarkers().length; const c = this.root.querySelector('#m-count'); if (c) c.textContent = `${fmtN(n)} de ${fmtN(this.markers.length)} lugares`; }
+  private updateCount() { const n = this.visibleMarkers().length; const c = this.root.querySelector('#m-count'); if (c) c.textContent = `${fmtN(n)} de ${fmtN(this.markers.length)} lugares`; const em = this.root.querySelector<HTMLElement>('#c-empty'); if (em) em.hidden = n > 0 || this.listMode; this.paintMini(); }
   private onFilter(key: string) { this.updateCount(); this.schedule(); if (this.listMode) this.renderList(); if (key === 'sea' && !this.listMode) { if (this.f.sea !== '') { const r = REGIONS[+this.f.sea]!; this.fitRect(r.x - 10, OY + r.y - 10, r.w + 20, r.h + 20); } else this.fitRect(0, 0, W, H); } }
   private setMode(list: boolean) { this.listMode = list; setParams({ l: list ? '1' : null }); (this.root.querySelector('.map-stage') as HTMLElement).hidden = list; (this.root.querySelector('#place-list') as HTMLElement).hidden = !list; this.root.querySelector('#v-map')!.setAttribute('aria-pressed', String(!list)); this.root.querySelector('#v-list')!.setAttribute('aria-pressed', String(list)); if (list) this.renderList(); else { this.base(); this.applyTransform(); this.schedule(); } }
   private renderList() {
@@ -248,7 +264,7 @@ export class CartaView implements View {
     const order = [...singles].sort((p, q) => (q.i === this.selected ? 1e9 : 0) + (stops.has(q.i) ? 1e6 : 0) + impOf(q.i) - ((p.i === this.selected ? 1e9 : 0) + (stops.has(p.i) ? 1e6 : 0) + impOf(p.i)));
     const maxL = scale < 1.5 ? 0 : scale < 2.2 ? 16 : scale < 3 ? 40 : 1e9; let nl = 0; const place = new Map<number, { x: number; y: number; a: string; lead: number[] | null }>();
     for (const m of order) {
-      const nm = nameOf(m.i), tw = nm.length * 7.2 + 8, px = sx(m), py = sy(m), forced = m.i === this.selected || stops.has(m.i); if (!forced && nl >= maxL) continue;
+      const nm = nameOf(m.i), tw = nm.length * 7.2 + 8, px = sx(m), py = sy(m), forced = m.i === this.selected || stops.has(m.i); if (!forced && (nl >= maxL || !this.layers.has('nombres'))) continue;
       const cand = [[17, 4, 'start', px + 15, py - 8], [-17, 4, 'end', px - 15 - tw, py - 8], [0, 27, 'middle', px - tw / 2, py + 12], [0, -15, 'middle', px - tw / 2, py - 30]] as const; let got: { x: number; y: number; a: string; lead: number[] | null } | null = null;
       for (const [dx, dy, an, bx0, by0] of cand) if (fits(bx0, by0, tw, 17)) { got = { x: dx, y: dy, a: an, lead: null }; break; }
       if (!got && forced) for (const [ox, oy] of [[30, -26], [-30, -26], [30, 30], [-30, 30], [0, -46], [0, 52]] as const) { const bx0 = px + ox - (ox < 0 ? tw : ox === 0 ? tw / 2 : 0), by0 = py + oy - 12; if (fits(bx0, by0, tw, 17)) { got = { x: ox + (ox < 0 ? -3 : ox === 0 ? 0 : 3), y: oy + 3, a: ox < 0 ? 'end' : ox === 0 ? 'middle' : 'start', lead: [ox * 0.5, oy * 0.5, ox, oy - 4] }; break; } }
@@ -256,15 +272,47 @@ export class CartaView implements View {
       if (got) { place.set(m.i, got); if (!forced) nl++; }
     }
     for (const m of singles) {
-      const sel = m.i === this.selected, st = stops.get(m.i), img = photos && IMGS?.[m.i] ? imgUrl(IMGS[m.i]!, 72) : ''; const nm = nameOf(m.i); const lb = place.get(m.i);
+      const sel = m.i === this.selected, st = this.layers.has('ruta') ? stops.get(m.i) : undefined, img = photos && IMGS?.[m.i] ? imgUrl(IMGS[m.i]!, 72) : ''; const nm = nameOf(m.i); const lb = place.get(m.i);
       const body = img ? `<circle r="13" fill="#f4e4b4" stroke="${INK}" stroke-width="1.6"/><image href="${esc(img)}" x="-12" y="-12" width="24" height="24" preserveAspectRatio="xMidYMin slice" style="clip-path:circle(50%)" onerror="this.remove()"/>` : iconFor(m.kind, m.sea, m.i);
       const text = lb ? `${lb.lead ? `<path d="M${lb.lead[0]} ${lb.lead[1]} L${lb.lead[2]} ${lb.lead[3]}" class="c-lead"/>` : ''}<text x="${lb.x}" y="${lb.y}" text-anchor="${lb.a}" class="c-label ${m.kind === 3 ? 'reg' : ''}">${esc(nm)}</text>` : '';
-      html += `<g class="c-pin ${sel ? 'sel' : ''}" data-p="${m.i}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) scale(${inv})" tabindex="0" role="button" aria-label="${esc(nm)}${st ? ', parada ' + st + ' del viaje' : ''}">${sel ? '<circle r="19" class="c-sel"/>' : ''}${body}${text}<title>${esc(nm)}</title></g>`;
+      html += `<g class="c-pin ${sel ? 'sel' : ''}" data-p="${m.i}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) scale(${inv})" tabindex="0" role="button" aria-label="${esc(nm)}${st ? ', parada ' + st + ' del viaje' : ''}${m.conf < 2 ? ', posición aproximada' : ''}">${sel ? '<circle r="19" class="c-sel"/>' : ''}${this.precise && m.conf < 2 ? '<circle r="17" class="c-approx"/>' : ''}${body}${text}<title>${esc(nm)}${m.conf < 2 ? ' · posición aproximada (confianza ' + CONF_TXT[m.conf] + ')' : ''}</title></g>`;
     }
     // paradas del viaje: siempre visibles, numeradas y coloreadas por saga, aunque su isla esté dentro de un grupo
-    for (const r of this.data.route) { const m = this.byI.get(r.p); if (!m || !this.passes(m)) continue; const px = sx(m), py = sy(m); if (px < -20 || px > w + 20 || py < -20 || py > h + 20) continue; const k = stops.get(r.p)!, col = SAGA_COL[(this.data.arcs[r.a]?.s ?? 0) % SAGA_COL.length]!; const tiny = scale < 1.1; html += `<g class="c-stop" data-p="${r.p}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) scale(${inv}) ${tiny ? '' : 'translate(11 -13)'}" tabindex="0" role="button" aria-label="Parada ${k} del viaje: ${esc(nameOf(r.p))}"><circle r="${tiny ? 4.5 : 9}" fill="${col}" stroke="${INK}" stroke-width="1.5"/>${tiny ? '' : `<text y="3.5" text-anchor="middle" class="c-stopn">${k}</text>`}</g>`; }
+    for (const r of this.layers.has('ruta') ? this.data.route : []) { const m = this.byI.get(r.p); if (!m || !this.passes(m)) continue; const px = sx(m), py = sy(m); if (px < -20 || px > w + 20 || py < -20 || py > h + 20) continue; const k = stops.get(r.p)!, col = SAGA_COL[(this.data.arcs[r.a]?.s ?? 0) % SAGA_COL.length]!; const tiny = scale < 1.1; html += `<g class="c-stop" data-p="${r.p}" transform="translate(${m.x.toFixed(1)} ${m.y.toFixed(1)}) scale(${inv}) ${tiny ? '' : 'translate(11 -13)'}" tabindex="0" role="button" aria-label="Parada ${k} del viaje: ${esc(nameOf(r.p))}"><circle r="${tiny ? 4.5 : 9}" fill="${col}" stroke="${INK}" stroke-width="1.5"/>${tiny ? '' : `<text y="3.5" text-anchor="middle" class="c-stopn">${k}</text>`}</g>`; }
     this.layer.innerHTML = html; if (this.routePath && this.shipLen > 0) this.setShip(this.shipLen);
   }
+  // ---------- estilo, capas, minimapa y teclado ----------
+  private syncUi() {
+    const r = this.root; r.querySelectorAll<HTMLInputElement>('[data-lay]').forEach((c) => (c.checked = this.layers.has(c.dataset.lay!)));
+    r.querySelector('#s-carta')!.setAttribute('aria-pressed', String(!this.precise)); r.querySelector('#s-precisa')!.setAttribute('aria-pressed', String(this.precise)); this.svg.classList.toggle('precisa', this.precise);
+    this.content.querySelectorAll<SVGElement>('.lyr').forEach((g) => { const k = [...g.classList].find((c) => c.startsWith('lyr-'))!.slice(4); g.style.display = this.layers.has(k) ? '' : 'none'; });
+    this.routeG.style.display = this.shipG.style.display = this.layers.has('ruta') ? '' : 'none'; (r.querySelector('.route-bar') as HTMLElement).hidden = !this.layers.has('ruta');
+    this.paintMini();
+  }
+  private pushLayers() { const def = DEF_LAYERS[this.precise ? 'precisa' : 'carta']!; const same = def.length === this.layers.size && def.every((k) => this.layers.has(k)); setParams({ vista: this.precise ? 'precisa' : null, capa: same ? null : [...this.layers].join(',') || '-' }); }
+  private setStyle(precise: boolean) { if (precise === this.precise) return; this.precise = precise; this.layers = new Set(DEF_LAYERS[precise ? 'precisa' : 'carta']); this.pushLayers(); this.syncUi(); this.schedule(); }
+  private initControls() {
+    const r = this.root; r.querySelector('#s-carta')!.addEventListener('click', () => this.setStyle(false)); r.querySelector('#s-precisa')!.addEventListener('click', () => this.setStyle(true));
+    r.querySelector('#c-lay')!.addEventListener('change', (e) => { const c = e.target as HTMLInputElement; if (!c.dataset.lay) return; if (c.checked) this.layers.add(c.dataset.lay); else this.layers.delete(c.dataset.lay); this.pushLayers(); this.syncUi(); this.schedule(); });
+    r.querySelector('#lay-reset')!.addEventListener('click', () => { this.layers = new Set(DEF_LAYERS[this.precise ? 'precisa' : 'carta']); this.pushLayers(); this.syncUi(); this.schedule(); });
+    r.querySelector('#c-clear')!.addEventListener('click', () => { this.f = { sea: '', saga: '', kind: '' }; ['f-sea', 'f-saga', 'f-kind'].forEach((id) => ((r.querySelector('#' + id) as HTMLSelectElement).value = '')); setParams({ m: null, s: null, k: null }); this.updateCount(); this.schedule(); });
+    this.svg.addEventListener('keydown', (e) => {
+      if (e.target !== this.svg) return; const st = 90 / this.z.k; const sel = select(this.svg);
+      if (e.key === 'ArrowLeft') this.zoomB.translateBy(sel, st, 0); else if (e.key === 'ArrowRight') this.zoomB.translateBy(sel, -st, 0); else if (e.key === 'ArrowUp') this.zoomB.translateBy(sel, 0, st); else if (e.key === 'ArrowDown') this.zoomB.translateBy(sel, 0, -st);
+      else if (e.key === '+' || e.key === '=') this.zoomBy(1.5); else if (e.key === '-') this.zoomBy(1 / 1.5); else if (e.key === '0') this.fitRect(0, 0, W, H); else return; e.preventDefault();
+    });
+    let drag = false; const go = (e: PointerEvent) => { const b = this.mini.getBoundingClientRect(); this.centerAt(((e.clientX - b.left) / b.width) * W, ((e.clientY - b.top) / b.height) * H); };
+    this.mini.addEventListener('pointerdown', (e) => { drag = true; this.mini.setPointerCapture(e.pointerId); go(e); }); this.mini.addEventListener('pointermove', (e) => { if (drag) go(e); }); this.mini.addEventListener('pointerup', () => (drag = false));
+  }
+  private initMini() {
+    const m = this.root.querySelector('#c-mini') as unknown as SVGSVGElement; this.mini = m; let h = '<rect width="' + W + '" height="' + H + '" fill="#efdcab"/>';
+    REGIONS.forEach((r, k) => { h += '<rect x="' + r.x + '" y="' + (OY + r.y) + '" width="' + r.w + '" height="' + r.h + '" fill="' + (k === 6 ? '#cf9a62' : k === 7 ? '#7fb3ad' : '#4f93a8') + '" fill-opacity=".55"/>'; });
+    m.innerHTML = h + '<g id="mini-dots"></g><rect id="mini-view" fill="rgba(179,64,46,.18)" stroke="#b3402e" stroke-width="12"/>'; this.miniView = m.querySelector('#mini-view') as unknown as SVGRectElement;
+  }
+  private paintMini() { const d = this.mini?.querySelector('#mini-dots'); if (d) d.innerHTML = this.visibleMarkers().map((m) => '<circle cx="' + m.x.toFixed(0) + '" cy="' + m.y.toFixed(0) + '" r="7" fill="' + (m.conf === 2 ? '#b3402e' : '#3a2813') + '"/>').join(''); this.updateMini(); }
+  private updateMini() { if (!this.miniView) return; const w = this.svg.clientWidth, h = this.svg.clientHeight, k = this.z.k * this.s0; const x0 = (0 - this.z.x) / this.z.k, y0 = (0 - this.z.y) / this.z.k; const cx0 = (x0 - this.bx) / this.s0, cy0 = (y0 - this.by) / this.s0, cw = w / k, ch = h / k; const rx = Math.max(0, cx0), ry = Math.max(0, cy0), rw = Math.min(W, cx0 + cw) - rx, rh = Math.min(H, cy0 + ch) - ry; this.miniView.setAttribute('x', String(rx)); this.miniView.setAttribute('y', String(ry)); this.miniView.setAttribute('width', String(Math.max(20, rw))); this.miniView.setAttribute('height', String(Math.max(20, rh))); }
+  private centerAt(x: number, y: number) { const vw = this.svg.clientWidth, vh = this.svg.clientHeight, k = this.z.k, sx = this.bx + x * this.s0, sy = this.by + y * this.s0; select(this.svg).call(this.zoomB.transform, zoomIdentity.translate(vw / 2 - sx * k, vh / 2 - sy * k).scale(k)); }
+
   focus(i: number | null) {
     this.selected = i; this.schedule(); if (i === null) return; const m = this.byI.get(i); if (!m) return;
     if (!this.passes(m)) { this.f = { sea: '', saga: '', kind: '' }; ['f-sea', 'f-saga', 'f-kind'].forEach((id) => ((this.root.querySelector('#' + id) as HTMLSelectElement).value = '')); setParams({ m: null, s: null, k: null }); this.updateCount(); }

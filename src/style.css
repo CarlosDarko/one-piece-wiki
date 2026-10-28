@@ -458,3 +458,23 @@ a.ext::after { content: " ↗"; font-size: .8em; opacity: .75; }
 body.q-max .top { position: fixed; top: 0; left: 0; right: 0; z-index: 70; transform: translateY(-100%); transition: transform .2s; } body.q-max .top:focus-within { transform: none; } body.q-max .q-find { display: inline-flex; align-items: center; justify-content: center; }
 body.q-max .shell { height: 100dvh; } body.q-max .q-stage .q-bar { position: absolute; top: 0; left: 0; right: 0; z-index: 9; background: rgba(8, 24, 48, .8); backdrop-filter: blur(6px); border-bottom-color: transparent; } body.q-max .q-canvas { position: absolute; inset: 0; } body.q-max .q-canvas .gtools { top: 70px; }
 @media (max-width: 720px) { body.q-max .q-canvas .gtools { top: auto; } }
+
+/* Los lugares: estilo Náutica/Precisa, capas, minimapa y estado vacío */
+.carta .c-top { position: absolute; right: 14px; top: 12px; z-index: 8; display: flex; gap: 8px; align-items: flex-start; }
+.carta .c-style { display: inline-flex; background: rgba(48, 32, 14, .94); border: 1px solid #8a6a35; border-radius: 12px; padding: 3px; }
+.carta .c-style button { min-height: 38px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: #f3e4b4; font-weight: 700; cursor: pointer; }
+.carta .c-style button[aria-pressed="true"] { background: #f1e2b4; color: #3a2813; }
+.c-lay { position: relative; background: rgba(48, 32, 14, .94); color: #f3e4b4; border: 1px solid #8a6a35; border-radius: 12px; }
+.c-lay > summary { cursor: pointer; list-style: none; min-height: 44px; padding: 0 14px; display: flex; align-items: center; font-weight: 800; } .c-lay > summary::-webkit-details-marker { display: none; }
+.c-lay-b { position: absolute; right: 0; top: 50px; width: 250px; max-width: calc(100vw - 28px); padding: 10px 12px; background: rgba(48, 32, 14, .98); border: 1px solid #8a6a35; border-radius: 12px; display: grid; gap: 4px; }
+.c-lay-b label { display: flex; align-items: center; gap: 8px; min-height: 36px; font-size: 13.5px; cursor: pointer; } .c-lay-b input { width: 18px; height: 18px; accent-color: #b3402e; }
+.c-lay-b .linkish { justify-self: start; color: #f6d27a; background: none; border: 0; text-decoration: underline; min-height: 36px; cursor: pointer; }
+.c-mini { position: absolute; right: 14px; bottom: 12px; width: 150px; height: auto; z-index: 6; border: 2px solid #8a6a35; border-radius: 8px; background: #efdcab; cursor: crosshair; touch-action: none; box-shadow: 0 4px 14px rgba(0, 0, 0, .4); }
+.carta .route-bar { right: 182px; } .carta .map-note { right: 182px; }
+.c-empty { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 9; text-align: center; padding: 18px 22px; background: rgba(48, 32, 14, .96); color: #f3e4b4; border: 1px solid #8a6a35; border-radius: 14px; } .c-empty[hidden] { display: none; } .c-empty p { margin: 0 0 12px; }
+.msvg.precisa image { opacity: .4; } .carta .c-approx { fill: none; stroke: #b3402e; stroke-width: 1.6; stroke-dasharray: 3 3; }
+.msvg:focus-visible { outline: 3px solid #f6d27a; outline-offset: -3px; }
+@media (max-width: 720px) {
+  .c-mini { display: none; } .carta .route-bar { right: 70px; } .carta .c-top { top: 10px; right: 10px; } .carta .c-style button { padding: 0 10px; } .c-lay > summary { padding: 0 12px; } .c-lay-b { top: 50px; }
+}
+.carta .route-bar[hidden] { display: none; }
