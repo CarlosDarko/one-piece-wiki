@@ -49,6 +49,9 @@ jobs:
       - name: Pruebas de humo con Chrome
         run: |
           node scripts/prueba-humo.mjs || { echo "Primer intento fallido (puede ser lentitud del runner), reintento una vez"; node scripts/prueba-humo.mjs; }
+      - name: Capturas del README (no bloquea la publicación si fallan)
+        continue-on-error: true
+        run: node scripts/capturas-readme.mjs
       - name: Guardar la caché final (fichas nuevas o cambiadas)
         if: always()
         uses: actions/cache/save@v4
@@ -58,7 +61,7 @@ jobs:
       - name: Guardar el estado de la sincronización en la rama fuente
         run: |
           git config user.name "atlas-bot"; git config user.email "atlas-bot@users.noreply.github.com"
-          git add data/sync.json data/novedades.json data/revs.json data/redirects.json data/catparents.json data/ultima-actualizacion.json || true
+          git add data/sync.json data/novedades.json data/revs.json data/redirects.json data/catparents.json data/ultima-actualizacion.json docs/capturas actions/README-sitio.md || true
           git diff --cached --quiet || { git commit -m "Estado de la sincronización"; git pull --rebase origin fuente; git push origin fuente; }
       - name: Publicar en main (GitHub Pages) solo si las pruebas pasaron
         run: |
