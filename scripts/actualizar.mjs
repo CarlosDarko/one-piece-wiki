@@ -142,3 +142,4 @@ else { log('Compilando, probando y publicando…'); run(process.execPath, ['scri
 lap('web_y_publicacion', tW);
 const resumen = { fecha: new Date().toISOString(), via, descargadas: hechas, fallidas, eliminadas: aBorrarReal.length, segundos: Math.round((Date.now() - t0) / 1000), tiempos, peticiones: stats.peticiones, reintentos: stats.reintentos };
 writeJson('data/ultima-actualizacion.json', resumen); log('Hecho: ' + JSON.stringify(resumen));
+try { const { generar } = await import('./readme.mjs'); if (generar()) log('Cifras del README del sitio actualizadas.'); } catch (e) { log('AVISO: no se pudo actualizar el README del sitio: ' + e.message); }

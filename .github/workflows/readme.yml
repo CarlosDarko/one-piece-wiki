@@ -1,0 +1,18 @@
+# Comprueba que los README no se han quedado desfasados (secciones de la web, marcadores, cifras fijas). No instala nada.
+name: README al día
+on:
+  pull_request:
+    branches: [fuente]
+  push:
+    branches: [fuente]
+permissions:
+  contents: read
+jobs:
+  readme:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node scripts/readme.mjs --comprobar

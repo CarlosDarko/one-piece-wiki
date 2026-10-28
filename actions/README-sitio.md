@@ -1,8 +1,12 @@
 # One Piece Atlas
 
-Atlas interactivo de One Piece: **más de 7.500 fichas** de la [One Piece Wiki en español](https://onepiece.fandom.com/es/) (personajes, tripulaciones, frutas del Diablo, barcos, islas, sagas…) con sus artículos completos, unidas por sus relaciones y navegables como un grafo. Inspirado en [ladonacion.es](https://ladonacion.es/).
+Atlas interactivo de One Piece: fichas de la [One Piece Wiki en español](https://onepiece.fandom.com/es/) (personajes, tripulaciones, frutas del Diablo, barcos, islas, sagas…) con sus artículos completos, unidas por sus relaciones y navegables como un grafo. Inspirado en [ladonacion.es](https://ladonacion.es/).
 
 **Web: https://carlosdarko.github.io/one-piece-wiki/**
+
+<!--auto:inicio-->
+**7.509** fichas · **35.728** relaciones entre ellas · última actualización: **2026-10-28**
+<!--auto:fin-->
 
 > ⚠️ Contiene **spoilers** de todo el manga y el anime.
 
