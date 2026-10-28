@@ -8,9 +8,18 @@ Atlas navegable de las **7.509 fichas** de la [One Piece Wiki en español](https
 
 Alternativa con servidor local: `npm start` (http://localhost:4173). Si cambias los datos o el código: `npm run all`.
 
-## Publicar en GitHub Pages
+## Publicación y actualización automática
 
-**Doble clic en `publicar.bat`**: compila, pasa las 65 pruebas, sube `dist/` a <https://github.com/CarlosDarko/one-piece-wiki>, activa Pages y comprueba <https://carlosdarko.github.io/one-piece-wiki/>. Necesita Git y la CLI de GitHub con sesión iniciada (`gh auth login`, una sola vez). `node scripts/publicar.mjs --preparar` solo prepara la carpeta `publicar/sitio` sin subir nada.
+El repositorio usa **dos ramas**:
+
+- `fuente`: el código (`src/`, `scripts/`), los datos pequeños de estado y el workflow. Es donde se trabaja.
+- `main`: solo el sitio ya compilado (`dist/`). Es lo que sirve GitHub Pages en <https://carlosdarko.github.io/one-piece-wiki/>. **No se edita a mano**: cada publicación la reescribe entera.
+
+El workflow `.github/workflows/actualizar.yml` (copia en `actions/actualizar.yml`) se ejecuta **cada lunes a las 07:00 UTC** y también a mano (Actions → «Actualizar el atlas» → Run workflow). Detecta cambios en la wiki por la API (≤1 petición/s), descarga solo las fichas nuevas o modificadas, reconstruye, pasa las pruebas de humo con Chrome y **publica en `main` solo si pasan**. La caché de fichas (~130 MB) vive en la caché privada de Actions; si caduca, el rastreo completo tarda ≈2 h. Para desactivarlo: Actions → «Actualizar el atlas» → «···» → Disable workflow.
+
+`publicar.bat` / `node scripts/publicar.mjs` siguen sirviendo para publicar manualmente desde el PC (necesitan Git y `gh auth login`).
+
+> El README que se ve en `main` es `actions/README-sitio.md`: el workflow lo copia en cada publicación. Para cambiarlo, edita ese fichero en `fuente`.
 
 ## Secciones
 
@@ -45,7 +54,7 @@ Los artículos se limpian con lista blanca de etiquetas (sin scripts ni estilos)
 
 ## Pruebas y herramientas
 
-- `node scripts/prueba-humo.mjs` — 65 comprobaciones con Edge real: buscador, grafo (formas, capas, pestañas), fichas completas, **todas las sagas y sus desplegables (también al volver a entrar)**, mapa y ruta, biblioteca sin paginación, comparador, móvil y accesibilidad básica.
+- `node scripts/prueba-humo.mjs` — 65 comprobaciones con un navegador real (Edge en local, Chrome en Actions; variable `BROWSER`): buscador, grafo (formas, capas, pestañas), fichas completas, **todas las sagas y sus desplegables (también al volver a entrar)**, mapa y ruta, biblioteca sin paginación, comparador, móvil y accesibilidad básica.
 - `node scripts/capturas.mjs reales|fixtures|recorte` — capturas en `capturas/` (las «fx-» usan imágenes sintéticas para validar maquetación y recortes de caras).
 - `node scripts/captura.mjs tiempos` — tiempos de carga. `node scripts/medir-dist.mjs` — tamaños sin comprimir, gzip y brotli.
 
