@@ -313,6 +313,8 @@ Ejemplos corregidos: ${c.ejemplos.join('; ')}.
     if (s < 0) for (const [re, k] of SEA_RULES) if (re.test(list[i].id)) { s = k; break; }
     return [i, s < 0 ? 10 : s];
   });
+  // correcciones de mar para paradas de la ruta cuyo mar la wiki da en otra categoría: Thriller Bark flota en el Triángulo Florian (Grand Line, Paradise), no en el West Blue
+  for (const [title, sea] of [['Thriller Bark', 4]]) { const row = places.find(([i]) => list[i].id === title); if (row) row[1] = sea; }
   // contención: «Región»/«Localización» de la infobox nombra el lugar que contiene a este (palacio → isla, bar → ciudad). Sirve para
   // heredar el mar de quien no lo tiene y para dibujar cada lugar junto al que lo contiene.
   const placeIdx = new Map(places.map((p, k) => [p[0], k])); const placeParent = new Map();
@@ -326,14 +328,21 @@ Ejemplos corregidos: ${c.ejemplos.join('; ')}.
   const GENERIC = /^(East Blue|West Blue|North Blue|South Blue|Grand Line|Paradise|Nuevo Mundo|Red Line|Calm Belt|Mar Azul)$/;
   const placeRows = places.map(([i, s]) => { const ch = firstCh.get(i) ?? 0; const ap = ch ? orderedArcs.findIndex((a) => a.rg && ch >= a.rg[0] && ch <= a.rg[1]) : -1; return [i, s, kindOf(list[i]), ch, ap]; });
   const seaOf = new Map(places.map(([i, s]) => [i, s]));
-  const route = []; // un lugar representativo por arco, en orden: la ruta del viaje sobre el mapa
+  // ruta de los Sombreros de Paja: un lugar canónico por arco, fijado a mano contra el orden del manga (y auditado en data/auditoria-ruta.md).
+  // Si un arco no figura aquí, se elige el lugar más representativo entre los que aparecen por primera vez en él.
+  const CANON_STOP = [[/Romance Dawn/, 'Isla de Dawn'], [/ciudad Orange/i, 'Ciudad Orange'], [/Villa Syrup/, 'Villa Syrup'], [/Baratie/, 'Baratie'], [/Arlong Park/, 'Arlong Park'], [/Loguetown/, 'Loguetown'], [/Reverse Mountain/, 'Reverse Mountain'], [/Whisky Peak/, 'Whisky Peak'], [/Little Garden/, 'Little Garden'], [/isla de Drum/i, 'Isla de Drum'], [/Arabasta/, 'Reino de Arabasta'], [/Jaya/, 'Jaya'], [/Skypiea/, 'Skypiea'], [/Long Ring Long Land/, 'Long Ring Long Land'], [/regreso a Water 7/i, 'Water 7'], [/Water 7/, 'Water 7'], [/Enies Lobby/, 'Enies Lobby'], [/Thriller Bark/, 'Thriller Bark'], [/regreso a Sabaody/i, 'Archipiélago Sabaody'], [/Sabaody/, 'Archipiélago Sabaody'], [/Amazon Lily/, 'Amazon Lily'], [/Impel Down/, 'Impel Down'], [/Marineford/, 'Marineford'], [/3D2Y/, 'Rusukaina'], [/isla Gyojin/i, 'Isla Gyojin'], [/Punk Hazard/, 'Punk Hazard'], [/Dressrosa/, 'Dressrosa'], [/Zou/, 'Zou'], [/Whole Cake/, 'Whole Cake Island'], [/Levely/, 'Mary Geoise'], [/Wano/, 'País de Wano'], [/Egghead/, 'Egghead']];
+  const idOf = new Map(list.map((e, i) => [e.id, i])); const route = [];
   orderedArcs.forEach((a, p) => {
-    const arcKey = key(a.n.replace(/^Arco (de la |de los |de las |del |de |)/i, ''));
-    const cands = placeRows.filter((r) => r[4] === p && r[1] !== 10 && r[2] !== 3 && !GENERIC.test(list[r[0]].id)).map((r) => ({ i: r[0], sc: (arcKey && (key(list[r[0]].id) === arcKey || key(list[r[0]].id).includes(arcKey) || arcKey.includes(key(list[r[0]].id))) ? 1000 : 0) + (r[2] === 0 ? 40 : 0) + Math.min(imp[r[0]], 60) }));
-    const pick = cands.sort((x, y) => y.sc - x.sc)[0]?.i;
+    const hit = CANON_STOP.find(([re]) => re.test(a.n)); let pick = hit ? idOf.get(hit[1]) : undefined;
+    if (pick === undefined || !seaOf.has(pick)) {
+      if (hit) console.warn('ruta: el lugar canónico «' + hit[1] + '» del arco «' + a.n + '» no está entre los lugares; se elige por aparición');
+      const arcKey = key(a.n.replace(/^Arco (de la |de los |de las |del |de |)/i, ''));
+      const cands = placeRows.filter((r) => r[4] === p && r[1] !== 10 && r[2] !== 3 && !GENERIC.test(list[r[0]].id)).map((r) => ({ i: r[0], sc: (arcKey && (key(list[r[0]].id) === arcKey || key(list[r[0]].id).includes(arcKey) || arcKey.includes(key(list[r[0]].id))) ? 1000 : 0) + (r[2] === 0 ? 40 : 0) + Math.min(imp[r[0]], 60) }));
+      pick = cands.sort((x, y) => y.sc - x.sc)[0]?.i;
+    }
     if (pick !== undefined && route[route.length - 1]?.p !== pick) route.push({ a: p, p: pick });
   });
-  emit('places', { seas: SEAS, kinds: KINDS, p: placeRows, par: [...placeParent].filter(([i, j]) => placeRows.some((r) => r[0] === j) && places[placeIdx.get(i)][1] === places[placeIdx.get(j)][1]), arcs: orderedArcs.map((a) => ({ i: a.i, n: a.n, s: sagaPos(a) })), sagas: sagas.map((s) => ({ i: s.i, n: s.n })), route });
+  emit('places', { seas: SEAS, kinds: KINDS, p: placeRows, par: [...placeParent].filter(([i, j]) => placeRows.some((r) => r[0] === j) && places[placeIdx.get(i)][1] === places[placeIdx.get(j)][1]), arcs: orderedArcs.map((a) => ({ i: a.i, n: a.n, s: sagaPos(a), ca: a.ca, ep: a.ep })), sagas: sagas.map((s) => ({ i: s.i, n: s.n })), route });
   // recompensas: ranking de personajes por la mayor recompensa que indica su infobox
   const bounty = list.map((e, i) => [i, e]).filter(([i]) => tipo(i) === 'personaje' && !list[i].id.includes('/')).map(([i, e]) => { const v = field(e, 'recompensa'); if (!v) return null; const nums = [...v.matchAll(/\d{1,3}(?:\.\d{3})+/g)].map((m) => +m[0].replace(/\./g, '')).filter((n) => n >= 1e6); return nums.length ? [i, Math.max(...nums)] : null; }).filter(Boolean).sort((a, b) => b[1] - a[1]).slice(0, 300);
   emit('rank', { bounty });

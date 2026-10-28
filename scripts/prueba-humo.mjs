@@ -86,16 +86,19 @@ check('Mapa: el filtro por mar cambia el número de lugares', count0 !== count1,
 await p.select('#f-sea', ''); await p.select('#f-saga', '2'); await sleep(500); const count2 = await p.$eval('#m-count', (e) => e.textContent);
 check('Mapa: el filtro por saga reduce los lugares', count2 !== count0, count2); await p.select('#f-saga', '');
 await p.select('#f-kind', '0'); await sleep(400); check('Mapa: el filtro por tipo funciona', (await p.$eval('#m-count', (e) => e.textContent)) !== count0); await p.select('#f-kind', '');
-await p.click('#r-play'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('1/31'), { timeout: 15000 }).catch(() => {}); const r1 = await p.$eval('#r-info', (e) => e.textContent);
-check('Carta: la ruta del viaje arranca en la primera parada', r1.startsWith('1/31'), r1.slice(0, 80));
-await p.click('#r-pp'); await p.click('#r-next'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('2/31'), { timeout: 15000 }).catch(() => {}); const r2 = await p.$eval('#r-info', (e) => e.textContent);
-check('Carta: siguiente avanza a la segunda parada', r2 !== r1 && r2.startsWith('2/31'), r2.slice(0, 80));
+await p.click('#r-play'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('1/32'), { timeout: 15000 }).catch(() => {}); const r1 = await p.$eval('#r-info', (e) => e.textContent);
+check('Carta: la ruta del viaje arranca en la primera parada', r1.startsWith('1/32'), r1.slice(0, 80));
+await p.click('#r-pp'); await p.click('#r-next'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('2/32'), { timeout: 15000 }).catch(() => {}); const r2 = await p.$eval('#r-info', (e) => e.textContent);
+check('Carta: siguiente avanza a la segunda parada', r2 !== r1 && r2.startsWith('2/32'), r2.slice(0, 80));
 check('Carta: la ruta dibujada, el barco y las paradas numeradas existen', (await p.$$eval('svg .c-run', (a) => a.length)) === 1 && (await p.$$eval('svg .c-ship', (a) => a.length)) === 1 && (await p.$$eval('.c-stop', (a) => a.length)) >= 1);
 await p.type('#pq', 'water 7'); await sleep(400); check('Mapa: el buscador de lugares sugiere islas', (await p.$$eval('#pres .opt', (a) => a.length)) > 0);
 await p.keyboard.press('Enter'); await sleep(1600); check('Carta: elegir un lugar abre su ficha en el panel', (await hash(p)).startsWith('#/lugares/') && !(await p.$eval('#panel', (e) => e.hidden)), await hash(p));
 await p.click('#v-list'); await sleep(500); check('Mapa: el modo lista accesible muestra los lugares por mar', (await p.$$eval('.pl-sea', (a) => a.length)) >= 3 && (await p.$$eval('.pl-sea li', (a) => a.length)) > 100);
 await p.close();
 
+// ---------- ruta de los Sombreros de Paja: orden, saga/arco, mares y barco (scripts/auditoria-ruta.mjs) ----------
+{ const { spawnSync } = await import('node:child_process'); const r = spawnSync(process.execPath, ['scripts/auditoria-ruta.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' });
+  check('Ruta: orden de capítulos, un arco por parada, mares permitidos, pares canónicos y cambio de barco (Merry→Sunny)', r.status === 0, (r.stdout + r.stderr).trim().slice(0, 300)); }
 // ---------- Los lugares: estilo Precisa, capas, minimapa, vacío y teclado ----------
 p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
 const vis = (sel) => p.evaluate((q) => { const e = document.querySelector(q); return !!e && getComputedStyle(e).display !== 'none'; }, sel);
@@ -140,10 +143,10 @@ await p.close();
   p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('#r-play'); await sleep(500);
   const info = () => p.$eval('#r-info', (e) => e.textContent); const txt = (s) => p.waitForFunction((x) => document.getElementById('r-info').textContent.startsWith(x), { timeout: 30000 }, s).then(() => true, () => false);
   await p.select('#r-speed', '4').catch(() => {}); await p.evaluate(() => { document.getElementById('r-speed').value = '4'; }); await p.click('#r-play');
-  const a1 = await txt('1/31'); const a2 = await txt('3/31'); check('Ruta: «Ruta del viaje» avanza sola de parada en parada', a1 && a2);
+  const a1 = await txt('1/32'); const a2 = await txt('3/32'); check('Ruta: «Ruta del viaje» avanza sola de parada en parada', a1 && a2);
   await p.click('#r-pp'); await sleep(300); const quieto = await info(); await sleep(1800); check('Ruta: la pausa detiene la animación', quieto === (await info()), quieto.slice(0, 30));
-  await p.click('#r-pp'); const fin = await txt('31/31'); check('Ruta: llega a la última parada (31/31, tramo más reciente)', fin);
-  await p.evaluate(() => document.querySelector('#r-stops button[data-n="9"]').click()); await sleep(500); check('Ruta: pulsar una parada salta a ella', (await info()).startsWith('10/31'));
+  await p.click('#r-pp'); const fin = await txt('32/32'); check('Ruta: llega a la última parada (última parada, tramo más reciente)', fin);
+  await p.evaluate(() => document.querySelector('#r-stops button[data-n="9"]').click()); await sleep(500); check('Ruta: pulsar una parada salta a ella', (await info()).startsWith('10/32'));
   await p.click('#r-reset'); await sleep(500); const rs = await p.evaluate(() => ({ info: document.getElementById('r-info').textContent, activa: document.querySelectorAll('#r-stops button.on').length, hechas: document.querySelectorAll('#r-stops button.done').length, barco: document.querySelector('.c-ship')?.getAttribute('visibility') }));
   check('Ruta: reiniciar vuelve a la parada 0 y oculta el barco', rs.activa === 0 && rs.hechas === 0 && rs.barco === 'hidden' && rs.info.startsWith('Sigue el rumbo'), JSON.stringify(rs)); await p.close();
 }
