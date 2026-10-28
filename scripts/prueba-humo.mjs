@@ -86,9 +86,9 @@ check('Mapa: el filtro por mar cambia el número de lugares', count0 !== count1,
 await p.select('#f-sea', ''); await p.select('#f-saga', '2'); await sleep(500); const count2 = await p.$eval('#m-count', (e) => e.textContent);
 check('Mapa: el filtro por saga reduce los lugares', count2 !== count0, count2); await p.select('#f-saga', '');
 await p.select('#f-kind', '0'); await sleep(400); check('Mapa: el filtro por tipo funciona', (await p.$eval('#m-count', (e) => e.textContent)) !== count0); await p.select('#f-kind', '');
-await p.click('#r-play'); await sleep(900); const r1 = await p.$eval('#r-info', (e) => e.textContent);
+await p.click('#r-play'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('1/31'), { timeout: 15000 }).catch(() => {}); const r1 = await p.$eval('#r-info', (e) => e.textContent);
 check('Carta: la ruta del viaje arranca en la primera parada', r1.startsWith('1/31'), r1.slice(0, 80));
-await p.click('#r-pp'); await p.click('#r-next'); await sleep(500); const r2 = await p.$eval('#r-info', (e) => e.textContent);
+await p.click('#r-pp'); await p.click('#r-next'); await p.waitForFunction(() => document.getElementById('r-info').textContent.startsWith('2/31'), { timeout: 15000 }).catch(() => {}); const r2 = await p.$eval('#r-info', (e) => e.textContent);
 check('Carta: siguiente avanza a la segunda parada', r2 !== r1 && r2.startsWith('2/31'), r2.slice(0, 80));
 check('Carta: la ruta dibujada, el barco y las paradas numeradas existen', (await p.$$eval('svg .c-run', (a) => a.length)) === 1 && (await p.$$eval('svg .c-ship', (a) => a.length)) === 1 && (await p.$$eval('.c-stop', (a) => a.length)) >= 1);
 await p.type('#pq', 'water 7'); await sleep(400); check('Mapa: el buscador de lugares sugiere islas', (await p.$$eval('#pres .opt', (a) => a.length)) > 0);
