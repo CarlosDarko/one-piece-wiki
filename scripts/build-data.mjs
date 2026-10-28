@@ -227,7 +227,8 @@ const REL = {
 };
 const IGNORE_FIELDS = new Set(['fecha', 'recompensa', 'edad', 'epiteto', 'sangre', 'altura', 'nacimiento', 'posicion', 'resultado', 'mencion', 'usoprimera', 'frutaprimera']);
 const edgeSet = new Map();
-const addEdge = (s, t, rel) => { if (s && t && s !== t) edgeSet.set(`${s}|${t}|${rel}`, [s, t, rel]); };
+// cada relación guarda su evidencia: «campo de la infobox», «categoría», «sección Relaciones», «título A vs. B»… y qué extremo es la ficha que lo declara (:s origen, :t destino)
+const addEdge = (s, t, rel, ev = '?', page = '') => { if (s && t && s !== t) { const k = `${s}|${t}|${rel}`; if (!edgeSet.has(k)) edgeSet.set(k, [s, t, rel, ev + (page === s ? ':s' : page === t ? ':t' : '')]); } };
 const idsByTitleKey = (title) => resolve(title);
 // parentescos del campo «Familia» de la infobox: «Nombre (Rol)» donde Rol es lo que ese personaje es respecto a la ficha actual
 const KIN_STATS = { tipados: 0, genericos: 0 };
@@ -251,7 +252,7 @@ function kinEdges(e, f) {
       else if (/^sobrin[oa]/.test(role)) { rel = 'tio_de'; a = own; b = t; }
       else if (/espos[oa]|marido|c[oó]nyuge|prometid[oa]/.test(role)) { rel = 'conyuge_de'; }
     }
-    if (rel) { addEdge(a, b, rel); KIN_STATS.tipados++; } else { addEdge(own, t, 'familiar_de'); KIN_STATS.genericos++; }
+    if (rel) { addEdge(a, b, rel, 'ib:familia', own); KIN_STATS.tipados++; } else { addEdge(own, t, 'familiar_de', 'ib:familia', own); KIN_STATS.genericos++; }
   });
 }
 
@@ -260,14 +261,14 @@ for (const e of ents.values()) {
     if (IGNORE_FIELDS.has(f.k)) continue;
     if (f.k === 'familia') { kinEdges(e, f); continue; }
     for (const h of f.hrefs) { const t = resolve(h); if (!t) continue;
-      const r = REL[f.k]; if (r) (r[1] === 'out' ? addEdge(e.id, t, r[0]) : addEdge(t, e.id, r[0])); else addEdge(e.id, t, 'relacionado');
-      if (/^(combatientes|poder)[12]$/.test(f.k)) addEdge(t, e.id, 'lado' + f.k.slice(-1)); // bando del combatiente, para derivar los enfrentamientos
+      const r = REL[f.k]; if (r) (r[1] === 'out' ? addEdge(e.id, t, r[0], 'ib:' + f.k, e.id) : addEdge(t, e.id, r[0], 'ib:' + f.k, e.id)); else addEdge(e.id, t, 'relacionado', 'ib:' + f.k, e.id);
+      if (/^(combatientes|poder)[12]$/.test(f.k)) addEdge(t, e.id, 'lado' + f.k.slice(-1), 'ib:' + f.k, e.id); // bando del combatiente, para derivar los enfrentamientos
     }
   }
   // plantillas "Personajes del Arco de X" -> aparece_en; categorías con nombre de otra ficha -> miembro_de / aparece_en
-  for (const tp of e.tpl) { const m = tp.match(/^Personajes del (Arco .+)$/i); if (m) addEdge(e.id, resolve(m[1]), 'aparece_en'); }
-  for (const c of e.cats) { const t = resolve(c); if (t && t !== e.id) addEdge(e.id, t, result.get(t)?.tipo === 'organizacion' ? 'miembro_de' : 'categorizado_en'); }
-  for (const c of e.cats) { const m = c.match(/saga de (.+)$/i); if (m && result.get(e.id)?.tipo !== 'saga') addEdge(e.id, resolve('Saga de ' + m[1]), 'aparece_en'); }
+  for (const tp of e.tpl) { const m = tp.match(/^Personajes del (Arco .+)$/i); if (m) addEdge(e.id, resolve(m[1]), 'aparece_en', 'tpl', e.id); }
+  for (const c of e.cats) { const t = resolve(c); if (t && t !== e.id) addEdge(e.id, t, result.get(t)?.tipo === 'organizacion' ? 'miembro_de' : 'categorizado_en', 'cat', e.id); }
+  for (const c of e.cats) { const m = c.match(/saga de (.+)$/i); if (m && result.get(e.id)?.tipo !== 'saga') addEdge(e.id, resolve('Saga de ' + m[1]), 'aparece_en', 'cat', e.id); }
 }
 // relaciones sacadas de las secciones del artículo («Familia», «Tripulación», «Aliados», «Enemigos»…): enlaces a otros personajes u organizaciones, siempre en los dos sentidos
 const SEC_REL = []; // la familia sale solo del campo «Familia» de la infobox (parentesco tipado): los títulos y párrafos daban falsos parientes
@@ -280,7 +281,7 @@ for (const e of ents.values()) {
   for (const p of h.split(/(?=<h[2-4] id=)/)) {
     const m = p.match(HEAD); if (m) { const lvl = +m[1]; const rel = SEC_REL.find(([re]) => re.test(m[2].replace(new RegExp('<[^>]+>', 'g'), '').trim()))?.[1]; if (rel) { cur = rel; curLvl = lvl; } else if (lvl <= curLvl) { cur = null; curLvl = 9; } }
     if (!cur) continue;
-    for (const l of p.matchAll(/<a data-t="([^"]*)"/g)) { const t = resolve(l[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue; addEdge(own, t, cur); addEdge(t, own, cur); secEdges++; }
+    for (const l of p.matchAll(/<a data-t="([^"]*)"/g)) { const t = resolve(l[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'")); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue; addEdge(own, t, cur, 'sec', own); addEdge(t, own, cur, 'sec', own); secEdges++; }
   }
 }
 console.log('relaciones desde secciones del artículo:', secEdges, '· parentescos tipados:', KIN_STATS.tipados, 'genéricos:', KIN_STATS.genericos);
@@ -295,7 +296,7 @@ for (const e of ents.values()) {
     if (lvl === 2) { inRel = /^relaciones/i.test(text); continue; } if (!inRel || lvl < 3) continue;
     const t = resolve(text.replace(/\([^)]*\)/g, '').trim()); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue;
     const body0 = p.slice(m[0].length).replace(TAGS, ' ').replace(/\s+/g, ' ').trim(); const dot = body0.indexOf('. '); const body = body0.slice(0, dot > 40 ? Math.min(dot, 260) : 220); const rel = FOE.test(body) ? 'enemigo_de' : ALLY.test(body) ? 'aliado_de' : FRIEND.test(body) ? 'amigo_de' : null; if (!rel) continue;
-    addEdge(own, t, rel); addEdge(t, own, rel); relEdges++;
+    addEdge(own, t, rel, 'sec:relaciones', own); addEdge(t, own, rel, 'sec:relaciones', own); relEdges++;
   }
 }
 console.log('relaciones desde la sección «Relaciones»:', relEdges);
@@ -307,12 +308,12 @@ for (const e of ents.values()) {
   for (const p of h.split(/(?=<h[2-4] id=)/)) {
     const m = p.match(HEADFULL); if (!m) continue; const text = m[2].replace(STRIP, '').replace(/&amp;/g, '&').trim(); const sp = text.split(/\s+vs\.?\s+/i); if (sp.length !== 2) continue;
     const side = (s) => s.replace(/\([^)]*\)/g, '').split(/,\s*|\s+y\s+|\s+e\s+/).map((x) => x.trim()).filter(Boolean).map((x) => resolve(x)).filter((t) => t && ['personaje', 'organizacion'].includes(result.get(t)?.tipo));
-    const A = side(sp[0]), B = side(sp[1]); for (const a of A) for (const b of B) if (a !== b && !(A.includes(b) && B.includes(a))) { addEdge(a, b, 'enfrenta_a'); vsEdges++; }
+    const A = side(sp[0]), B = side(sp[1]); for (const a of A) for (const b of B) if (a !== b && !(A.includes(b) && B.includes(a))) { addEdge(a, b, 'enfrenta_a', 'titulo:vs', e.id); vsEdges++; }
   }
 }
 console.log('enfrentamientos desde títulos «A vs. B»:', vsEdges);
 // arco -> saga: primer enlace de la introducción que sea una saga
-for (const e of ents.values()) if (result.get(e.id).tipo === 'arco') for (const b of e.bodyLinks) { const t = resolve(b); if (t && result.get(t)?.tipo === 'saga') { addEdge(e.id, t, 'parte_de'); break; } }
+for (const e of ents.values()) if (result.get(e.id).tipo === 'arco') for (const b of e.bodyLinks) { const t = resolve(b); if (t && result.get(t)?.tipo === 'saga') { addEdge(e.id, t, 'parte_de', 'texto:arco', e.id); break; } }
 // evoluciones / sucesiones: patrones en la primera frase con enlace al predecesor o sucesor
 const EVO_FROM = /(?:evoluci[oó]n|versi[oó]n (?:mejorada|avanzada|evolucionada)|forma (?:evolucionada|avanzada)|sucesora?|reemplazo|reconstrucci[oó]n|sucede a|sustituy[eó] a|reemplaz[oó] a|fue (?:construid[oa]|creado?|creada) para reemplazar)\D{0,50}?(?:de(?:l)?|a partir de|a)\s+(?:la |el |los |las )?\[\[([^\]|]+)/i;
 const EVO_TYPES = new Set(['barco', 'tecnica', 'arma', 'fruta_del_diablo']);
@@ -322,26 +323,26 @@ let evo = 0;
 const dbgEvo = [];
 for (const e of ents.values()) {
   let m = e.introMarked.match(EVO_FROM); if (m && process.env.DEBUG_EVO) dbgEvo.push(e.id + ' <= ' + m[1] + ' [' + result.get(e.id)?.tipo + '/' + result.get(resolve(m[1]))?.tipo + ']');
-  if (m) { const t = resolve(m[1]); if (t && t !== e.id && sameEvoType(t, e.id)) { addEdge(t, e.id, 'evoluciona_en'); evo++; } }
-  m = e.introMarked.match(EVO_TO); if (m) { const t = resolve(m[1]); if (t && t !== e.id && sameEvoType(t, e.id)) { addEdge(e.id, t, 'evoluciona_en'); evo++; } }
+  if (m) { const t = resolve(m[1]); if (t && t !== e.id && sameEvoType(t, e.id)) { addEdge(t, e.id, 'evoluciona_en', 'texto:evolucion', e.id); evo++; } }
+  m = e.introMarked.match(EVO_TO); if (m) { const t = resolve(m[1]); if (t && t !== e.id && sameEvoType(t, e.id)) { addEdge(e.id, t, 'evoluciona_en', 'texto:evolucion', e.id); evo++; } }
 }
 for (const e of ents.values()) { // fruta que cambia de naturaleza o modelo (p. ej. Gomu Gomu -> Hito Hito, modelo Nika)
   const f = e.fields.find((x) => x.k === 'nombrefruta');
   if (!f || !/modelo|reclasific|despert|verdader/i.test(f.value)) continue;
   const [a, b] = [...f.value.matchAll(/(Fruta [A-Za-zÀ-ú' ]+?)(?=s*[(:)]|$)/g)].map((m) => resolve(m[1].trim()));
-  if (a && b && a !== b && result.get(a)?.tipo === 'fruta_del_diablo' && result.get(b)?.tipo === 'fruta_del_diablo') { addEdge(a, b, 'evoluciona_en'); evo++; }
+  if (a && b && a !== b && result.get(a)?.tipo === 'fruta_del_diablo' && result.get(b)?.tipo === 'fruta_del_diablo') { addEdge(a, b, 'evoluciona_en', 'ib:nombrefruta', a); evo++; }
 }
 // (a) familias de subpáginas numeradas "<padre>/<nombre> N" con N consecutivos (p. ej. Fruta Gomu Gomu/Gear 2 -> 3 -> 4 -> 5)
 const fam = new Map();
 for (const e of ents.values()) { const m = e.id.match(/^(.+)\/(\D+?)\s+(\d+)$/); if (m) (fam.get(m[1] + '/' + m[2]) ?? fam.set(m[1] + '/' + m[2], []).get(m[1] + '/' + m[2])).push([+m[3], e.id]); }
-for (const list of fam.values()) { list.sort((a, b) => a[0] - b[0]); for (let i = 1; i < list.length; i++) if (list[i][0] === list[i - 1][0] + 1) { addEdge(list[i - 1][1], list[i][1], 'evoluciona_en'); evo++; } }
+for (const list of fam.values()) { list.sort((a, b) => a[0] - b[0]); for (let i = 1; i < list.length; i++) if (list[i][0] === list[i - 1][0] + 1) { addEdge(list[i - 1][1], list[i][1], 'evoluciona_en', 'regla:serie'); evo++; } }
 // (b) barcos de una tripulación con rangos de capítulos sucesivos y sin solapamiento (Going Merry cap. 41-430 -> Thousand Sunny cap. 436-presente)
 for (const e of ents.values()) {
   const f = e.fields.find((x) => x.k === 'navio'); if (!f) continue;
   const ranges = [...f.value.matchAll(/\(\s*cap\.?\s*(\d+)\s*[-–]\s*(\d+|pres\w*)/gi)].map((m) => [+m[1], m[2].match(/^\d+$/) ? +m[2] : Infinity]);
   const ships = f.hrefs.map(resolve);
   if (ranges.length < 2 || ranges.length !== ships.length || ships.some((s) => !s || result.get(s)?.tipo !== 'barco')) continue;
-  if (ranges.every((r, i) => i === 0 || (r[0] > ranges[i - 1][0] && r[0] >= ranges[i - 1][1] - 10))) for (let i = 1; i < ships.length; i++) { addEdge(ships[i - 1], ships[i], 'evoluciona_en'); evo++; }
+  if (ranges.every((r, i) => i === 0 || (r[0] > ranges[i - 1][0] && r[0] >= ranges[i - 1][1] - 10))) for (let i = 1; i < ships.length; i++) { addEdge(ships[i - 1], ships[i], 'evoluciona_en', 'regla:serie'); evo++; }
 }
 console.log('evoluciones detectadas:', evo);
 if (process.env.DEBUG_EVO) console.log(dbgEvo.slice(0, 60).join('\n'));
@@ -368,3 +369,4 @@ function relCountEvo() { return typed.filter((x) => x[2] === 'evoluciona_en').le
 emitWeb({ list, idx, result, typed, mentions, mentionedBy, resolve, catParents, redirects, TYPES, quality });
 
 try { (await import('node:child_process')).execFileSync(process.execPath, ['scripts/auditoria-familia.mjs'], { stdio: 'ignore' }); } catch { /* el informe es opcional */ }
+try { (await import('node:child_process')).execFileSync(process.execPath, ['scripts/verificar-relaciones.mjs'], { stdio: 'ignore' }); } catch (e) { console.log('AVISO: no se pudo ejecutar el verificador de relaciones:', String(e.message).slice(0, 120)); }

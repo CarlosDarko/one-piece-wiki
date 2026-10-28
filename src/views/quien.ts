@@ -3,7 +3,7 @@
 // más corto entre dos fichas («¿cómo se relaciona X con Y?»).
 import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zoom';
 import { select } from 'd3-selection';
-import { IDX, IMGS, REL_LABEL, REL_ORDER, TYPE_COLOR, TYPE_LABEL, avatarHtml, relLabel, shownName, GREY_RELS, ensureImgs, ensureIndex, esc, fmtN, findByTitle, getDetail, imgUrl, impOf, initials, isFace, loadData, nameOf, relStyle, rootOf, typeOf, type Detail } from '../data';
+import { IDX, IMGS, REL_LABEL, REL_ORDER, TYPE_COLOR, TYPE_LABEL, avatarHtml, relLabel, shownName, evText, GREY_RELS, ensureImgs, ensureIndex, esc, fmtN, findByTitle, getDetail, imgUrl, impOf, initials, isFace, loadData, nameOf, relStyle, rootOf, typeOf, type Detail } from '../data';
 import { go, navigateToFicha, parseHash } from '../nav';
 import { KIN_RELS, kinSubLabel, showFicha } from '../panel';
 import { attachSearch, searchIndex } from '../search';
@@ -26,7 +26,7 @@ export class QuienView implements View {
   private root!: HTMLElement; private home!: HTMLElement; private stage!: HTMLElement; private pathBox!: HTMLElement; private svg!: SVGSVGElement; private vp!: SVGGElement; private disposers: (() => void)[] = [];
   private zb!: ZoomBehavior<SVGSVGElement, unknown>; private t: ZoomTransform = zoomIdentity; private ro?: ResizeObserver; private token = 0; private cur = -1; private bbox = { x0: -300, y0: -300, x1: 300, y1: 300 };
   private groups: Group[] = []; private shown = new Map<string, number>(); private center = -1; private listMode = false; private edges: { adj: Map<number, [number, number, number][]>; rels: string[] } | null = null; private chosen: [number, number] = [-1, -1];
-  canExpand = false; noAutoPanel = () => { try { return localStorage.getItem('opa-panel') === 'cerrado'; } catch { return false; } }; // la ficha lateral se abre sola salvo que el usuario la haya plegado (se recuerda)
+  private why = new Map<number, string>(); canExpand = false; noAutoPanel = () => { try { return localStorage.getItem('opa-panel') === 'cerrado'; } catch { return false; } }; // la ficha lateral se abre sola salvo que el usuario la haya plegado (se recuerda)
 
   async mount(host: HTMLElement) {
     const box = document.createElement('div'); box.className = 'quien'; host.append(box); this.root = box;
@@ -97,9 +97,9 @@ export class QuienView implements View {
   }
   private buildGroups(self: number, d: Detail): Group[] {
     const seen = new Set<number>([self]); const gm = new Map<string, Group>(); const order = (rel: string) => { const k = REL_ORDER.indexOf(rel); return k < 0 ? 99 : k; };
-    const rows = d.rl.map(([r, j, dir]) => ({ rel: IDX!.rels[r]!, j: rootOf(j), dir })).filter((x) => x.rel !== 'categorizado_en').sort((a, b) => order(a.rel) - order(b.rel) || a.dir - b.dir);
+    this.why = new Map(); const rows = d.rl.map(([r, j, dir, ev]) => ({ rel: IDX!.rels[r]!, j: rootOf(j), dir, why: ev === undefined ? '' : evText(IDX!.ev?.[ev], self, rootOf(j), dir) })).filter((x) => x.rel !== 'categorizado_en').sort((a, b) => order(a.rel) - order(b.rel) || a.dir - b.dir);
     const SOCIAL = new Set(['familiar_de', 'companero_de', 'tripulacion_de', 'aliado_de', 'amigo_de', 'coincidido_con', 'mascota_de', 'enemigo_de', 'enfrenta_a']); const inG = new Set<string>();
-    for (const x of rows) { const soc = SOCIAL.has(x.rel); if (x.j < 0 || (!soc && seen.has(x.j))) continue; if (soc) { const kk = x.rel + '|' + x.j; if (inG.has(kk)) continue; inG.add(kk); } else seen.add(x.j); const lab = '§' + x.rel + '|' + x.dir; const key = lab; let g = gm.get(key); if (!g) { g = { key, label: lab, color: relStyle(x.rel).c, rel: x.rel, dir: x.dir, ids: [], weak: WEAKREL.has(x.rel), hidden: false }; gm.set(key, g); } g.ids.push(x.j); }
+    for (const x of rows) { const soc = SOCIAL.has(x.rel); if (x.j < 0 || (!soc && seen.has(x.j))) continue; if (soc) { const kk = x.rel + '|' + x.j; if (inG.has(kk)) continue; inG.add(kk); } else seen.add(x.j); if (x.why && !this.why.has(x.j)) this.why.set(x.j, x.why); const lab = '§' + x.rel + '|' + x.dir; const key = lab; let g = gm.get(key); if (!g) { g = { key, label: lab, color: relStyle(x.rel).c, rel: x.rel, dir: x.dir, ids: [], weak: WEAKREL.has(x.rel), hidden: false }; gm.set(key, g); } g.ids.push(x.j); }
     const add = (key: string, label: string, ids: number[]) => { const u = [...new Set(ids.map(rootOf))].filter((j) => !seen.has(j)); u.forEach((j) => seen.add(j)); if (u.length) gm.set(key, { key, label, color: '#9fb4d0', rel: 'menciona', ids: u, weak: true, hidden: false }); };
     add('m|0', '§menciona|0', d.m); add('m|1', '§menciona|1', d.mb);
     const gs0 = [...gm.values()]; const byLab = new Map<string, Group>(); for (const g of gs0) { g.ids.sort((a, b) => impOf(b) - impOf(a)); const [rl, dr] = g.label.slice(1).split('|'); const lab = relLabel(rl!, +dr!, self, g.ids.length, g.ids); const ex = byLab.get(lab); if (ex) { ex.ids = [...new Set([...ex.ids, ...g.ids])].sort((a, b) => impOf(b) - impOf(a)); } else { g.label = lab; g.key = lab; byLab.set(lab, g); } } const gs = [...byLab.values()];
@@ -162,7 +162,7 @@ export class QuienView implements View {
       el('circle', { r: n.r + 2, cy: 4, class: 'qn-sh' }, g); el('circle', { r: n.r, class: 'qn-c', fill: col }, g);
       const u = IMGS?.[i] ? imgUrl(IMGS[i]!, c ? 280 : 120) : ''; const ini = el('text', { y: c ? 12 : 7, 'text-anchor': 'middle', class: 'qn-i', 'font-size': c ? 34 : 20 }, g); ini.textContent = initials(nameOf(i));
       if (u) { const im = el('image', { href: u, x: -n.r, y: -n.r, width: n.r * 2, height: n.r * 2, preserveAspectRatio: isFace(i) ? 'xMidYMin slice' : 'xMidYMid slice', style: 'clip-path:circle(50%)', referrerpolicy: 'no-referrer' }, g); im.addEventListener('error', () => im.remove()); }
-      const nm = shownName(i), lines = wrap(nm, c ? 26 : 16), lab = el('text', { 'text-anchor': 'middle', class: c ? 'qn-l big' : 'qn-l' }, g); lines.forEach((ln, q) => { const ts = el('tspan', { x: 0, y: n.r + (c ? 26 : 17) + q * (c ? 21 : 14) }, lab); ts.textContent = ln; }); const tt = el('title', {}, g); tt.textContent = nm;
+      const nm = shownName(i), lines = wrap(nm, c ? 26 : 16), lab = el('text', { 'text-anchor': 'middle', class: c ? 'qn-l big' : 'qn-l' }, g); lines.forEach((ln, q) => { const ts = el('tspan', { x: 0, y: n.r + (c ? 26 : 17) + q * (c ? 21 : 14) }, lab); ts.textContent = ln; }); const tt = el('title', {}, g); tt.textContent = nm + (this.why.get(i) ? ' — ¿Por qué? ' + this.why.get(i) : '');
     });
     this.renderLegend(); if (this.listMode) this.renderList();
     this.fit(false); if (animate && !reduce()) { vp.classList.remove('enter'); void (vp as unknown as HTMLElement).getBoundingClientRect; vp.classList.add('enter'); window.setTimeout(() => vp.classList.remove('enter'), 900); }
@@ -189,7 +189,7 @@ export class QuienView implements View {
   private async loadEdges() {
     if (this.edges) return this.edges; const d = await loadData<EdgesData>('edges'); const adj = new Map<number, [number, number, number][]>();
     const put = (a: number, b: number, r: number, dir: number) => { let l = adj.get(a); if (!l) adj.set(a, (l = [])); l.push([b, r, dir]); };
-    for (let k = 0; k < d.e.length; k += 3) { const a = rootOf(d.e[k]!), b = rootOf(d.e[k + 1]!), r = d.e[k + 2]!; if (a === b) continue; put(a, b, r, 0); put(b, a, r, 1); }
+    for (let k = 0; k < d.e.length; k += 4) { const a = rootOf(d.e[k]!), b = rootOf(d.e[k + 1]!), r = d.e[k + 2]!; if (a === b) continue; put(a, b, r, 0); put(b, a, r, 1); }
     this.edges = { adj, rels: d.rels }; return this.edges;
   }
   private route(from: number, to: number, ban: Set<number>, E: { adj: Map<number, [number, number, number][]> }): { n: number; r: number; dir: number }[] | null {

@@ -6,15 +6,15 @@ const N = idx.n.length, T = (i) => idx.types[idx.t[i]];
 const roots = []; for (let i = 0; i < N; i++) if (!idx.sub.some && true) roots.push(i);
 const subs = new Set(idx.sub.map(([s]) => s)); const isRoot = (i) => !subs.has(i) && T(i) !== 'meta';
 const por = {}; const add = (t, k) => { por[t] ??= { fichas: 0, sinImagen: 0, sinResumen: 0, sinRelacion: 0 }; por[t][k]++; };
-const conRel = new Set(); for (let k = 0; k < edges.e.length; k += 3) { conRel.add(edges.e[k]); conRel.add(edges.e[k + 1]); }
+const conRel = new Set(); for (let k = 0; k < edges.e.length; k += 4) { conRel.add(edges.e[k]); conRel.add(edges.e[k + 1]); }
 const resumen = new Set(); for (let s = 0; s < 64; s++) { const f = `public/data/detail/${s}.js`; if (!existsSync(f)) continue; const t = readFileSync(f, 'utf8'); const o = JSON.parse(t.slice(t.indexOf(',') + 1, t.lastIndexOf(')'))); for (const k in o) if (o[k].r && o[k].r.length > 40) resumen.add(+k); }
 for (let i = 0; i < N; i++) { if (!isRoot(i)) continue; const t = T(i); add(t, 'fichas'); if (!imgs[i]) add(t, 'sinImagen'); if (!resumen.has(i)) add(t, 'sinResumen'); if (!conRel.has(i)) add(t, 'sinRelacion'); }
 const norm = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); const seen = new Map(), dup = []; for (let i = 0; i < N; i++) { if (!isRoot(i)) continue; const k = norm(idx.n[i]); if (seen.has(k)) dup.push(idx.n[i] + ' / ' + idx.n[seen.get(k)]); else seen.set(k, i); }
-const bad = []; for (let k = 0; k < edges.e.length; k += 3) if (edges.e[k] >= N || edges.e[k + 1] >= N) bad.push(k);
+const bad = []; for (let k = 0; k < edges.e.length; k += 4) if (edges.e[k] >= N || edges.e[k + 1] >= N) bad.push(k);
 const rows = Object.entries(por).sort((a, b) => b[1].fichas - a[1].fichas);
 const md = `# Auditoría final de datos
 
-Generada ${new Date().toISOString()}. Fichas raíz (sin subpáginas ni páginas meta): ${rows.reduce((a, [, v]) => a + v.fichas, 0)}. Relaciones tipadas publicadas: ${edges.e.length / 3}. Lugares en la carta: ${places.p.length}.
+Generada ${new Date().toISOString()}. Fichas raíz (sin subpáginas ni páginas meta): ${rows.reduce((a, [, v]) => a + v.fichas, 0)}. Relaciones tipadas publicadas: ${edges.e.length / 4}. Lugares en la carta: ${places.p.length}.
 
 | Tipo | Fichas | Sin imagen | Sin resumen | Sin ninguna relación estructurada |
 |---|---:|---:|---:|---:|

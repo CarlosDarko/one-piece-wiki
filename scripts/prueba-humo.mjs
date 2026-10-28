@@ -307,7 +307,7 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   const labs = await p.evaluate(async () => { const all = new Set(); const n = window.__qCount; for (let i = 0; i < n; i++) { try { for (const [l] of await window.__qGroups(i)) all.add(l); } catch { /* sin detalle */ } } return [...all]; });
   check('Etiquetas: todas legibles (sin guiones bajos ni nombres internos)', labs.length >= 20 && !labs.some((l) => /_|^(miembro|capitan|come|clase)/.test(l)), `${labs.length} etiquetas`);
   const gl = async (n) => p.evaluate(async (name) => { const i = window.__qFind(name); if (i === undefined) return ['NO ENCONTRADA ' + name]; return (await window.__qGroups(i)).map(([l]) => l); }, n);
-  const han = await gl('Hachinosu'); check('Isla Hachinosu: sin «Miembro de»; lo suyo es sede/base', !han.includes('Miembro de') && han.some((l) => /Sede de/.test(l)), han.join(' | '));
+  const han = await gl('Hachinosu'); check('Isla Hachinosu: sin «Miembro de»; sus bandas salen como «Organizaciones afiliadas»', !han.includes('Miembro de') && han.some((l) => /Organizaciones afiliadas/.test(l)), han.join(' | '));
   const boa = await gl('Boa Hancock'); check('Género: Boa Hancock → «Capitana de»; Zoro → «Propietario de»; Caesar → «Fruta del Diablo»', boa.includes('Capitana de') && (await gl('Roronoa Zoro')).includes('Propietario de') && (await gl('Caesar Clown')).includes('Fruta del Diablo'), boa.join(' | '));
   check('Número: una raza usa plural y un objeto «Pertenece a»', (await gl('Tribu mink')).some((l) => /Originarios de|Residen en|Aparecen en/.test(l)) || true); await p.close();
 }
@@ -366,6 +366,17 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   await goto(p, '#/ficha/' + ficha('Fruta Gomu Gomu')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(400);
   const yub = await p.evaluate(() => { const txt = document.querySelector('.article').textContent; const a = [...document.querySelectorAll('.article a')].find((x) => /Yubari/i.test(x.textContent)); return { esta: /Yubari/.test(txt), enlace: a ? a.getAttribute('href') : null }; });
   check('«melón Yubari» es texto normal (no enlaza a Wikipedia)', yub.esta && !(yub.enlace ?? '').includes('wikipedia'), JSON.stringify(yub)); await p.close();
+}
+// ---------- evidencia y verificación de las relaciones ----------
+{
+  const { readFileSync } = await import('node:fs'); const ld = (n) => JSON.parse(readFileSync(resolve(ROOT, 'public/data/' + n + '.js'), 'utf8').replace(/^__od\("[^"]+",/, '').replace(/\);?\s*$/, ''));
+  const ix = ld('index'), ed = ld('edges'); const none = ix.ev.indexOf('?'); let sin = 0, total = 0; for (let k = 0; k < ed.e.length; k += 4) { total++; if (ed.e[k + 3] === none || ix.ev[ed.e[k + 3]] === undefined) sin++; }
+  const ver = JSON.parse(readFileSync(resolve(ROOT, 'data/verificacion-relaciones.json'), 'utf8'));
+  check('Evidencia: toda relación publicada lleva su evidencia registrada (0 sin respaldo)', total > 10000 && sin === 0, sin + ' de ' + total + ' sin evidencia');
+  check('Verificación independiente: muestra estratificada ≥ 400 y error estimado con IC 95 % por debajo del 10 %', ver.tamanoMuestra >= 400 && ver.ic95[1] < 0.1 && ver.tasaErrorBrutaWilson.ic95[1] < 0.1, 'n=' + ver.tamanoMuestra + ' errores=' + ver.errores + ' IC=' + ver.ic95.map((x) => (100 * x).toFixed(1) + '%').join('–'));
+  p = await page(); await goto(p, '#/quien/' + ficha('Monkey D. Luffy')); await p.waitForSelector('.qn.center'); await sleep(700);
+  const pq = await p.evaluate(() => [...document.querySelectorAll('.qn[data-i] title')].filter((t) => t.textContent.includes('¿Por qué?')).length);
+  check('«¿Por qué?»: los nodos del grafo explican su evidencia (infobox, categoría o regla)', pq >= 5, String(pq)); await p.close();
 }
 // ---------- regresión de agrupaciones y relaciones ----------
 {

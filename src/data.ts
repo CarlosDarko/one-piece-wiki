@@ -1,6 +1,6 @@
 // Capa de datos: los ficheros data/<nombre>.js llaman a __od(nombre, datos); así se cargan con <script> también desde file://.
-export interface Index { g?: string[]; sub: [number, number][]; types: string[]; rels: string[]; n: string[]; t: number[]; s: number[]; a: [number, string][] }
-export interface Detail { r: string; url: string; ib: [string, string, string][]; cats: string[]; conf: number; why: string; rl: [number, number, number][]; m: number[]; mb: number[] }
+export interface Index { ev?: string[]; g?: string[]; sub: [number, number][]; types: string[]; rels: string[]; n: string[]; t: number[]; s: number[]; a: [number, string][] }
+export interface Detail { r: string; url: string; ib: [string, string, string][]; cats: string[]; conf: number; why: string; rl: [number, number, number, number?][]; m: number[]; mb: number[] }
 export interface Article { h: string; t: [string, number, string][]; x: [string, string, string][] }
 export interface FeaturedNode { i: number; n: string; t: number; s: number; m: string }
 export interface Featured { types: string[]; rels: string[]; n: FeaturedNode[]; e: [number, number, number][] }
@@ -49,7 +49,7 @@ export const TYPE_ICON: Record<string, string> = {
 export const FACE_TYPES = new Set(['personaje', 'animal', 'persona_real', 'raza']);
 // aristas: color, grosor y trazo por relación
 export const REL_STYLE: Record<string, { c: string; w: number; d?: string }> = {
-  miembro_de: { c: '#59c98b', w: 1.8 }, progenitor_de: { c: '#ff7ac0', w: 2.4 }, progenitor_adoptivo_de: { c: '#ff9bd2', w: 2.2 }, hermano_de: { c: '#f472b6', w: 2.2 }, hermano_adoptivo_de: { c: '#f9a8d4', w: 2.2 }, abuelo_de: { c: '#e879a9', w: 2 }, tio_de: { c: '#fb7185', w: 2 }, conyuge_de: { c: '#fb5f8d', w: 2.4 }, companero_de: { c: '#2dd4bf', w: 2 }, tripulacion_de: { c: '#2dd4bf', w: 2.4 }, aliado_de: { c: '#38bdf8', w: 2 }, amigo_de: { c: '#a3e635', w: 2 }, coincidido_con: { c: '#8aa0bd', w: 1.2 }, mascota_de: { c: '#f59e0b', w: 2 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
+  miembro_de: { c: '#59c98b', w: 1.8 }, progenitor_de: { c: '#ff7ac0', w: 2.4 }, progenitor_adoptivo_de: { c: '#ff9bd2', w: 2.2 }, hermano_de: { c: '#f472b6', w: 2.2 }, hermano_adoptivo_de: { c: '#f9a8d4', w: 2.2 }, abuelo_de: { c: '#e879a9', w: 2 }, tio_de: { c: '#fb7185', w: 2 }, conyuge_de: { c: '#fb5f8d', w: 2.4 }, companero_de: { c: '#2dd4bf', w: 2 }, tripulacion_de: { c: '#2dd4bf', w: 2.4 }, aliado_de: { c: '#38bdf8', w: 2 }, amigo_de: { c: '#a3e635', w: 2 }, coincidido_con: { c: '#8aa0bd', w: 1.2 }, mascota_de: { c: '#f59e0b', w: 2 }, afiliado_a: { c: '#7fd1a3', w: 1.8 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
   originario_de: { c: '#b48cf2', w: 1.5, d: '5 4' }, reside_en: { c: '#b48cf2', w: 1.5, d: '5 4' }, en_region: { c: '#b48cf2', w: 1.5, d: '5 4' }, base_en: { c: '#b48cf2', w: 1.5, d: '5 4' },
   parte_de: { c: '#ffb27a', w: 1.8 }, anterior: { c: '#ffb27a', w: 1.8 }, siguiente: { c: '#ffb27a', w: 1.8 }, dirigido_por: { c: '#9aa7ff', w: 1.8 }, menciona: { c: '#c5d6ee', w: 1.1, d: '2 4' },
 };
@@ -133,14 +133,14 @@ const SELF: Record<string, Forms> = {
   usa_barco: ['Barco', 'Barco', 'Barcos'], come: ['Fruta del Diablo', 'Fruta del Diablo', 'Frutas del Diablo'], familiar_de: ['Familia', 'Familia', 'Familia'], es_de_raza: ['Raza', 'Raza', 'Raza'],
   base_en: ['Base en', 'Base en', 'Bases en'], ocurre_en: ['Ocurre en', 'Ocurre en', 'Ocurre en'], en_region: ['Región', 'Región', 'Región'], de_nacion: ['Nación', 'Nación', 'Nación'],
   parte_de: ['Parte de', 'Parte de', 'Parte de'], evoluciona_en: ['Evoluciona en', 'Evoluciona en', 'Evoluciona en'], primera_aparicion: ['Primera aparición', 'Primera aparición', 'Primera aparición'],
-  anterior: ['Anterior', 'Anterior', 'Anterior'], siguiente: ['Siguiente', 'Siguiente', 'Siguiente'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Menciona', 'Menciona', 'Mencionan'], mascota_de: ['Mascotas y compañeros animales', 'Mascotas y compañeros animales', 'Mascotas y compañeros animales'],
+  anterior: ['Anterior', 'Anterior', 'Anterior'], siguiente: ['Siguiente', 'Siguiente', 'Siguiente'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Menciona', 'Menciona', 'Mencionan'], mascota_de: ['Mascotas y compañeros animales', 'Mascotas y compañeros animales', 'Mascotas y compañeros animales'], afiliado_a: ['Organizaciones afiliadas', 'Organizaciones afiliadas', 'Organizaciones afiliadas'],
 };
 const OTHER: Record<string, [string, string]> = {
   miembro_de: ['Miembro', 'Miembros'], capitan_de: ['Capitán', 'Capitanes'], propiedad_de: ['Pertenece a', 'Pertenece a'], originario_de: ['Natural de aquí', 'Naturales de aquí'], reside_en: ['Residente', 'Residentes'],
   combatiente_en: ['Combatiente', 'Combatientes'], aparece_en: ['Aparece aquí', 'Aparecen aquí'], doblado_por: ['Doblaje de', 'Doblaje de'], dirigido_por: ['Dirige', 'Dirige'], usa_barco: ['Usado por', 'Usado por'],
   come: ['Usuario', 'Usuarios'], familiar_de: ['Familia', 'Familia'], es_de_raza: ['Miembro de la raza', 'Miembros de la raza'], base_en: ['Sede de', 'Sede de'], ocurre_en: ['Escenario de', 'Escenario de'],
   en_region: ['Incluye', 'Incluye'], de_nacion: ['Incluye', 'Incluye'], parte_de: ['Incluye', 'Incluye'], evoluciona_en: ['Evoluciona de', 'Evoluciona de'], primera_aparicion: ['Primera aparición de', 'Primera aparición de'],
-  anterior: ['Siguiente', 'Siguiente'], siguiente: ['Anterior', 'Anterior'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Mencionado en', 'Mencionados en'], mascota_de: ['Compañero de', 'Compañeros de'],
+  anterior: ['Siguiente', 'Siguiente'], siguiente: ['Anterior', 'Anterior'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Mencionado en', 'Mencionados en'], mascota_de: ['Compañero de', 'Compañeros de'], afiliado_a: ['Lugar afiliado', 'Lugares afiliados'],
 };
 const PLURAL_NAME = /^(Piratas|Los |Las |Marines|Cazadores|Revolucionarios|Samuráis|Ninjas|Gigantes|Hermanos|Tribu|Clan|Escuadrón)/;
 const FEM_ORG = /^(Alianza|Marina|Familia|Banda|Tripulación|Flota|Armada|Organización|Tribu|Compañía)/;
@@ -187,4 +187,18 @@ const linkOne = (p: string): string => {
 export function valueHtml(v: string): string {
   const parts = v.split(/ · |;\s*|\n/).map((s) => s.trim()).filter(Boolean);
   return parts.length > 1 ? `<ul class="kv-list">${parts.map((p) => `<li>${linkOne(p)}</li>`).join('')}</ul>` : linkOne(parts[0] ?? v);
+}
+
+// «¿Por qué?»: la evidencia de cada relación, en lenguaje llano. ev = clave guardada («ib:organizacion:s», «regla:tripulacion»…); el sufijo :s/:t indica qué extremo la declara
+export function evText(ev: string | undefined, self: number, other: number, dir: number): string {
+  if (!ev || ev === '?') return '';
+  const parts = ev.split(':'); const flag = parts[parts.length - 1] === 's' || parts[parts.length - 1] === 't' ? parts.pop()! : ''; const kind = parts[0]!, field = parts[1] ?? '';
+  const page = flag ? nameOf(((flag === 's') === (dir === 0)) ? self : other) : ''; const pg = page ? `«${page}»` : 'la ficha';
+  const f = field === 'familia' ? 'Familia' : field;
+  switch (kind) {
+    case 'ib': return `Según la infobox de ${pg}, campo «${f}»`; case 'cat': return `Por una categoría de ${pg}`; case 'tpl': return `Por una plantilla de personajes en ${pg}`;
+    case 'sec': return `Por la sección «Relaciones» de ${pg}`; case 'titulo': return `Por un título «A vs. B» en ${pg}`; case 'texto': return `Por el texto de ${pg}`;
+    case 'regla': return ({ tripulacion: 'Derivada: pertenecen a la misma banda pirata', alianza: 'Derivada: pertenecen a la misma alianza o flota', coincidencia: 'Derivada: comparten una organización', mascota: 'Derivada: mascota o compañero animal de la misma banda', enfrentamiento: 'Derivada: combatientes de bandos opuestos en un mismo combate', serie: 'Derivada: forman una serie (barcos sucesivos…)', amistad: 'Derivada: amistad indicada en la wiki' } as Record<string, string>)[field] ?? 'Derivada por regla';
+    default: return '';
+  }
 }
