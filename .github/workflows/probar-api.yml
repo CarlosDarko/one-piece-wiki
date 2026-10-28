@@ -1,0 +1,22 @@
+# Prueba mínima y reversible: ¿puede un runner de GitHub hablar con la API de la wiki, o Cloudflare lo bloquea?
+# Solo se ejecuta a mano (workflow_dispatch). Hace 2 peticiones normales con el mismo User-Agent neutro.
+name: Probar acceso a la API de la wiki
+on: workflow_dispatch
+permissions: {}
+jobs:
+  prueba:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Una consulta de cambios recientes y una ficha
+        run: |
+          UA="personal-research-script/0.1"
+          c1=$(curl -s -o rc.json -w "%{http_code}" -A "$UA" "https://onepiece.fandom.com/es/api.php?action=query&list=recentchanges&rclimit=1&rcnamespace=0&format=json")
+          echo "recentchanges -> HTTP $c1"; head -c 300 rc.json; echo
+          sleep 2
+          c2=$(curl -s -o parse.json -w "%{http_code}" -A "$UA" "https://onepiece.fandom.com/es/api.php?action=parse&page=Monkey_D._Luffy&prop=revid&format=json")
+          echo "parse -> HTTP $c2"; head -c 200 parse.json; echo
+          if [ "$c1" != "200" ] || [ "$c2" != "200" ] || ! grep -q '"recentchanges"' rc.json || ! grep -q '"revid"' parse.json; then
+            echo "::error::La API no responde desde GitHub (¿reto anti-bot de Cloudflare?). No conviene programar la actualización en Actions."; exit 1
+          fi
+          echo "::notice::La API responde con normalidad desde GitHub."
