@@ -19,7 +19,7 @@ Alternativa con servidor local: `npm start` (http://localhost:4173). Si cambias 
 | Portada | Qué es, buscador grande, ejemplos, accesos y atajos («¿Qué quieres consultar?») |
 | Quién es quién | Grafo de entidades principales con forma, color e icono por tipo (círculo = personaje, hexágono = organización, rombo = fruta, escudo = lugar, casco = barco), capas por tipo y relación, y pestañas Todo · Personajes · Organizaciones · Frutas · Barcos · Lugares. Al pulsar un nodo se abre su ficha y se añaden sus relaciones |
 | Sagas | Ruta del viaje saga a saga y arco a arco, con portadas, lo que aparece en cada tramo y despliegues animados |
-| Los lugares | Mapa esquemático ilustrado con la ruta del viaje animada, filtros (mar, saga, tipo), buscador, ficha-resumen de isla y modo lista accesible |
+| Los lugares (OCULTO por ahora; ver «Interruptor» abajo) | Mapa esquemático ilustrado con la ruta del viaje animada, filtros (mar, saga, tipo), buscador, ficha-resumen de isla y modo lista accesible |
 | La biblioteca | Todas las fichas con scroll continuo virtualizado, índice A–Z, filtros por tipo, saga y mar, orden, contador y URL compartible; ranking de recompensas |
 | Ficha completa | El artículo íntegro de la wiki con índice, secciones plegables, infobox, relaciones, migas de pan y atribución con enlace al historial de autores |
 | Comparar | Dos fichas lado a lado: datos, relación directa, fichas en común y exclusivas |
@@ -54,3 +54,6 @@ Los artículos se limpian con lista blanca de etiquetas (sin scripts ni estilos)
 - Tipos y relaciones son automáticos: puede haber errores en fichas con poca información.
 - Las imágenes se cargan desde el CDN de Fandom (hotlink); sin internet, o si Fandom las bloquea, se ven iniciales de colores en lugar de fotos.
 - El mapa de lugares es esquemático; 41 lugares la wiki no los sitúa en ningún mar.
+
+## Interruptor de «Los lugares»
+La vista del mapa está **apagada** por decisión del autor (no estaba a la altura del resto). En `src/config.ts`, `LUGARES = false` oculta la pestaña, la portada, los enlaces y la ruta `#/lugares` (redirige a la portada) y deja el mapa fuera del empaquetado. El código (`src/views/carta.ts`) y los datos (`public/data/places.js`, usados también por el filtro por mar de la biblioteca) se conservan. Para reactivarlo: poner `LUGARES = true`, `npm run build` y las pruebas (`node scripts/prueba-humo.mjs` detecta el interruptor y ejecuta las del mapa). Las fichas de tipo lugar siguen siendo fichas normales.

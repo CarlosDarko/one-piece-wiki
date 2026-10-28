@@ -1,11 +1,13 @@
 // Prueba de humo con Edge real sobre dist/ abierto como file://:  node scripts/prueba-humo.mjs
 import puppeteer from 'puppeteer-core';
 import { resolve } from 'node:path';
+import { readFileSync } from 'node:fs';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 
 const ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const INDEX = pathToFileURL(resolve(ROOT, 'dist/index.html')).href;
 const EDGE = process.env.BROWSER ?? 'C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe';
+const LUG = /LUGARES = true/.test(readFileSync(resolve(ROOT, 'src/config.ts'), 'utf8')); // «Los lugares» (el mapa) está tras un interruptor en src/config.ts
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const browser = await puppeteer.launch({ executablePath: EDGE, headless: true, args: ['--disable-gpu', '--no-first-run'] });
 const results = []; const check = (name, ok, extra = '') => { results.push(ok); console.log((ok ? '  OK   ' : '  FALLA') + ' ' + name + (extra ? ' — ' + extra : '')); };
@@ -22,7 +24,7 @@ const ficha = encodeURIComponent;
 // ---------- portada y buscador ----------
 let p = await page();
 await goto(p, ''); await p.waitForSelector('.hero'); await sleep(600);
-check('Portada: 4 accesos, atajos y ejemplos clicables', (await p.$$eval('a.path', (a) => a.length)) === 4 && (await p.$$eval('.shortcuts a', (a) => a.length)) >= 8 && (await p.$$eval('#examples a', (a) => a.length)) >= 4);
+check('Portada: accesos, atajos y ejemplos clicables', (await p.$$eval('a.path', (a) => a.length)) === (LUG ? 4 : 3) && (await p.$$eval('.shortcuts a', (a) => a.length)) >= (LUG ? 8 : 7) && (await p.$$eval('#examples a', (a) => a.length)) >= 4);
 await p.type('#hq', 'gomu gomu'); await sleep(400);
 check('Portada: el buscador agrupa los resultados por tipo', (await p.$$eval('#hres .opt', (a) => a.length)) > 0 && (await p.$$eval('#hres .grp', (a) => a.length)) > 0);
 await p.keyboard.press('Enter'); await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); await sleep(600);
@@ -68,7 +70,7 @@ async function sagaToggles(label) {
   check(`Sagas (${label}): «Ver los N arcos» abre y cierra en las ${btns.length} sagas`, ok && btns.length >= 9, detail || `${btns.length} sagas`);
 }
 await sagaToggles('1ª visita');
-await p.evaluate(() => (location.hash = '#/lugares')); await sleep(1500); await p.evaluate(() => (location.hash = '#/sagas')); await p.waitForSelector('.saga'); await sleep(700);
+await p.evaluate((h) => (location.hash = h), LUG ? '#/lugares' : '#/biblioteca'); await sleep(1500); await p.evaluate(() => (location.hash = '#/sagas')); await p.waitForSelector('.saga'); await sleep(700);
 await sagaToggles('tras volver a entrar');
 await p.evaluate(() => (location.hash = '#/biblioteca')); await sleep(1200); await p.evaluate(() => (location.hash = '#/sagas')); await p.waitForSelector('.saga'); await sleep(600); await sagaToggles('3ª visita');
 await p.click('[data-expand^="arcs-"]'); await sleep(200);
@@ -79,6 +81,7 @@ check('Sagas: un nombre abre su ficha en «Quién es quién»', (await hash(p)).
 await p.close();
 
 // ---------- mapa ----------
+if (LUG) {
 p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(800);
 const count0 = await p.$eval('#m-count', (e) => e.textContent);
 await p.select('#f-sea', '0'); await sleep(900); const count1 = await p.$eval('#m-count', (e) => e.textContent);
@@ -95,11 +98,13 @@ await p.type('#pq', 'water 7'); await sleep(400); check('Mapa: el buscador de lu
 await p.keyboard.press('Enter'); await sleep(1600); check('Carta: elegir un lugar abre su ficha en el panel', (await hash(p)).startsWith('#/lugares/') && !(await p.$eval('#panel', (e) => e.hidden)), await hash(p));
 await p.click('#v-list'); await sleep(500); check('Mapa: el modo lista accesible muestra los lugares por mar', (await p.$$eval('.pl-sea', (a) => a.length)) >= 3 && (await p.$$eval('.pl-sea li', (a) => a.length)) > 100);
 await p.close();
+}
 
 // ---------- ruta de los Sombreros de Paja: orden, saga/arco, mares y barco (scripts/auditoria-ruta.mjs) ----------
 { const { spawnSync } = await import('node:child_process'); const r = spawnSync(process.execPath, ['scripts/auditoria-ruta.mjs', '--check'], { cwd: ROOT, encoding: 'utf8' });
   check('Ruta: orden de capítulos, un arco por parada, mares permitidos, pares canónicos y cambio de barco (Merry→Sunny)', r.status === 0, (r.stdout + r.stderr).trim().slice(0, 300)); }
 // ---------- Los lugares: estilo Precisa, capas, minimapa, vacío y teclado ----------
+if (LUG) {
 p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
 const vis = (sel) => p.evaluate((q) => { const e = document.querySelector(q); return !!e && getComputedStyle(e).display !== 'none'; }, sel);
 check('Lugares: conmutador Náutica/Precisa, capas y minimapa presentes', (await p.$$eval('.c-style button', (a) => a.length)) === 2 && (await p.$$eval('[data-lay]', (a) => a.length)) === 6 && (await vis('#c-mini')));
@@ -128,9 +133,10 @@ await p.close();
 p = await page(); await goto(p, '#/lugares?vista=precisa&capa=mares,rejilla'); await p.waitForSelector('svg.msvg .c-cl'); await sleep(900);
 check('URL compartible: vista y capas se restauran al abrir el enlace', (await vis('.lyr-rejilla')) && !(await vis('#route-bar')) && (await p.$eval('#s-precisa', (e) => e.getAttribute('aria-pressed'))) === 'true');
 await p.close();
+}
 
 // ---------- leyenda de la carta ----------
-{
+if (LUG) {
   p = await page(2560, 1080); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(900);
   const lg = await p.evaluate(() => { const l = document.getElementById('c-leg').getBoundingClientRect(); const c = document.querySelector('svg.msvg > g').getBoundingClientRect(); const ix = Math.max(0, Math.min(l.right, c.right) - Math.max(l.left, c.left)), iy = Math.max(0, Math.min(l.bottom, c.bottom) - Math.max(l.top, c.top)); return { abierta: document.getElementById('c-leg').open, entradas: document.querySelectorAll('#c-leg li').length, solape: Math.round(ix * iy), sagas: document.querySelectorAll('#c-sagas .c-sg').length }; });
   check('Carta: leyenda con trazos, paradas/colores de saga e iconos, abierta sin tapar la carta en pantalla ancha', lg.abierta && lg.entradas >= 8 && lg.solape === 0 && lg.sagas >= 10, JSON.stringify(lg)); await p.close();
@@ -139,7 +145,7 @@ await p.close();
   check('Carta (móvil): la leyenda empieza plegada y compacta, y se despliega al tocarla', lm.cerrada && lm.w <= 170 && lm.h <= 60 && (await (async () => { await p.click('#c-leg > summary'); await sleep(300); return p.$eval('#c-leg', (e) => e.open && e.getBoundingClientRect().height > 120); })()), JSON.stringify(lm)); await p.close();
 }
 // ---------- animación del recorrido: play avanza, pausa detiene, reiniciar vuelve a 0, llega a la última parada ----------
-{
+if (LUG) {
   p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('#r-play'); await sleep(500);
   const info = () => p.$eval('#r-info', (e) => e.textContent); const txt = (s) => p.waitForFunction((x) => document.getElementById('r-info').textContent.startsWith(x), { timeout: 30000 }, s).then(() => true, () => false);
   await p.select('#r-speed', '4').catch(() => {}); await p.evaluate(() => { document.getElementById('r-speed').value = '4'; }); await p.click('#r-play');
@@ -151,7 +157,7 @@ await p.close();
   check('Ruta: reiniciar vuelve a la parada 0 y oculta el barco', rs.activa === 0 && rs.hechas === 0 && rs.barco === 'hidden' && rs.info.startsWith('Sigue el rumbo'), JSON.stringify(rs)); await p.close();
 }
 // ---------- la leyenda de la carta se ve entera, sin scroll, en 6 tamaños ----------
-{
+if (LUG) {
   const mal = [];
   for (const [w, h, mob] of [[1920, 1080, false], [1440, 900, false], [1366, 768, false], [390, 844, true], [360, 640, true], [844, 390, true]]) {
     const pg = await page(w, h, mob); await goto(pg, '#/lugares'); await pg.waitForSelector('#c-leg'); await pg.evaluate(() => { document.getElementById('c-leg').open = true; }); await sleep(500);
@@ -159,6 +165,16 @@ await p.close();
     if (r.scroll || r.fuera || r.cortado) mal.push(w + 'x' + h + ' ' + JSON.stringify(r)); await pg.close();
   }
   check('Carta: la leyenda se ve entera, sin scroll interno ni texto cortado (6 tamaños)', mal.length === 0, mal.join(' · '));
+}
+// ---------- «Los lugares» oculto: sin enlaces, sin ruta y sin carga del mapa (interruptor en src/config.ts) ----------
+if (!LUG) {
+  p = await page(); const reqs = []; p.on('request', (r) => reqs.push(r.url())); await goto(p, ''); await p.waitForSelector('.hero'); await sleep(900);
+  check('Lugares oculto: ni la portada ni el menú enlazan a #/lugares', (await p.$$eval('a[href*="#/lugares"], a[data-v="lugares"], a[href*="#/carta"]', (a) => a.length)) === 0);
+  for (const h of ['#/lugares', '#/carta', '#/lugares/' + ficha('Water 7'), '#/lugares?vista=precisa']) { await goto(p, h); await sleep(900); const ok = await p.evaluate(() => ({ h: location.hash, hero: !!document.querySelector('.hero'), msvg: !!document.querySelector('svg.msvg'), err: !!document.querySelector('.err') })); check('Lugares oculto: ' + h + ' redirige a la portada sin errores ni mapa', (ok.h === '#/' || ok.h === '') && ok.hero && !ok.msvg && !ok.err, JSON.stringify(ok)); }
+  await goto(p, '#/ficha/' + ficha('Water 7')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(600);
+  check('Lugares oculto: la ficha de un lugar sigue funcionando y no enlaza al mapa', (await p.$$eval('a[href*="#/lugares"]', (a) => a.length)) === 0 && (await p.$eval('h1', (e) => e.textContent)).includes('Water 7'));
+  check('Lugares oculto: no se carga la carta ni sus datos al navegar por la portada', !reqs.some((u) => /\/places\.js/.test(u)), reqs.filter((u) => /places/.test(u)).join(','));
+  await p.close();
 }
 // ---------- biblioteca ----------
 p = await page(); await goto(p, '#/biblioteca'); await p.waitForSelector('.lib-card'); await sleep(900);
@@ -239,7 +255,7 @@ await p.close();
 p = await page(390, 844, true); await goto(p, '#/biblioteca'); await p.waitForSelector('.lib-card'); await sleep(600); check('Móvil: la biblioteca muestra una columna', (await p.$$eval('.lib-card', (a) => new Set(a.map((x) => x.style.left)).size)) === 1); await p.close();
 
 // ---------- accesibilidad básica ----------
-for (const [name, h] of [['portada', ''], ['grafo', '#/quien'], ['sagas', '#/sagas'], ['mapa', '#/lugares'], ['biblioteca', '#/biblioteca'], ['ficha', '#/ficha/' + ficha('Nami')], ['versus', '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro')], ['metodología', '#/metodologia']]) {
+for (const [name, h] of [['portada', ''], ['grafo', '#/quien'], ['sagas', '#/sagas'], ...(LUG ? [['mapa', '#/lugares']] : []), ['biblioteca', '#/biblioteca'], ['ficha', '#/ficha/' + ficha('Nami')], ['versus', '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro')], ['metodología', '#/metodologia']]) {
   p = await page(); await goto(p, h); await sleep(1600);
   const a11y = await p.evaluate(() => {
     const noName = [...document.querySelectorAll('button, a[href], input, select')].filter((e) => !(e.getAttribute('aria-label') || e.textContent.trim() || e.getAttribute('title') || e.getAttribute('placeholder') || (e.labels && e.labels.length) || e.getAttribute('aria-labelledby'))).length;
@@ -256,7 +272,7 @@ p = await page(); await goto(p, '#/novedades'); await p.waitForSelector('.news .
 check('Novedades: página con la última actualización y filtros por tipo de cambio', (await p.$eval('.news', (e) => /Última actualización/.test(e.textContent))) && (await p.$$eval('.news-filters input[data-t]', (a) => a.length)) === 4);
 check('Pie: muestra la fecha de la última actualización y enlaza a Novedades', (await p.$eval('footer.foot', (e) => /Actualizado el/.test(e.textContent) && !!e.querySelector('a[href="#/novedades"]')))); await p.close();
 p = await page(); await goto(p, ''); await p.waitForSelector('nav.tabs a'); 
-check('Cabecera: solo 4 pestañas (sin Metodología ni Comparar)', (await p.$$eval('nav.tabs a', (a) => a.map((x) => x.textContent))).join('|') === 'Quién es quién|Sagas|Los lugares|La biblioteca');
+check('Cabecera: solo 4 pestañas (sin Metodología ni Comparar)', (await p.$$eval('nav.tabs a', (a) => a.map((x) => x.textContent))).join('|') === (LUG ? 'Quién es quién|Sagas|Los lugares|La biblioteca' : 'Quién es quién|Sagas|La biblioteca'));
 check('Pie: Metodología enlazada solo desde el pie', (await p.$$eval('a[href="#/metodologia"]', (a) => a.map((x) => !!x.closest('footer')))).every(Boolean) && (await p.$$eval('a[href="#/metodologia"]', (a) => a.length)) === 1); await p.close();
 p = await page(); await goto(p, '#/sagas'); await p.waitForSelector('#ship'); await sleep(500);
 const shipFirst = await p.$eval('#ship', (e) => e.getAttribute('aria-label'));
@@ -270,7 +286,7 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   const bad = [];
   for (const [w, h] of [[360, 640], [390, 844], [412, 915], [768, 1024], [844, 390]]) {
     const pm = await page(w, h, true);
-    for (const hh of ['', '#/quien', '#/quien/' + ficha('Monkey D. Luffy'), '#/quien?de=' + ficha('Monkey D. Luffy') + '&a=' + ficha('Edward Newgate'), '#/sagas', '#/lugares', '#/biblioteca', '#/ficha/' + ficha('Nami'), '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro'), '#/novedades', '#/metodologia']) {
+    for (const hh of ['', '#/quien', '#/quien/' + ficha('Monkey D. Luffy'), '#/quien?de=' + ficha('Monkey D. Luffy') + '&a=' + ficha('Edward Newgate'), '#/sagas', ...(LUG ? ['#/lugares'] : []), '#/biblioteca', '#/ficha/' + ficha('Nami'), '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro'), '#/novedades', '#/metodologia']) {
       await goto(pm, hh); await sleep(1100);
       if (await pm.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)) bad.push(`${w}x${h} ${hh || 'portada'}`);
     }
@@ -349,7 +365,7 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   const bad = [];
   for (const [w, h, mob] of [[1440, 900, false], [360, 640, true], [390, 844, true], [412, 915, true], [768, 1024, true], [844, 390, true]]) {
     const pm = await page(w, h, mob);
-    for (const hh of ['', '#/quien', '#/quien/' + ficha('Monkey D. Luffy'), '#/quien?de=' + ficha('Monkey D. Luffy') + '&a=' + ficha('Edward Newgate'), '#/sagas', '#/lugares', '#/biblioteca', '#/ficha/' + ficha('Nami'), '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro'), '#/novedades']) {
+    for (const hh of ['', '#/quien', '#/quien/' + ficha('Monkey D. Luffy'), '#/quien?de=' + ficha('Monkey D. Luffy') + '&a=' + ficha('Edward Newgate'), '#/sagas', ...(LUG ? ['#/lugares'] : []), '#/biblioteca', '#/ficha/' + ficha('Nami'), '#/comparar?a=' + ficha('Monkey D. Luffy') + '&b=' + ficha('Roronoa Zoro'), '#/novedades']) {
       await goto(pm, hh); await sleep(1000);
       const r = await pm.evaluate(() => { const out = []; for (const e of document.querySelectorAll('body *')) { if (e.closest('svg') || e.classList.contains('sr') || !e.offsetParent && getComputedStyle(e).position !== 'fixed') continue; const cs = getComputedStyle(e); if (!e.textContent.trim()) continue; if (cs.textOverflow === 'ellipsis') out.push('ellipsis ' + e.className); else if ((cs.overflowX === 'hidden' || cs.overflowX === 'clip') && e.scrollWidth > e.clientWidth + 1 && e.children.length < 6) out.push('recorte ' + e.tagName + '.' + e.className); } return [...new Set(out)].slice(0, 4); });
       if (r.length) bad.push(`${w} ${hh || 'portada'}: ${r.join(', ')}`);

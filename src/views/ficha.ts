@@ -1,5 +1,6 @@
 // Ficha completa: el artículo íntegro de la wiki (todas sus secciones), índice con anclas, infobox, relaciones y atribución.
 import { IMGS, TYPE_COLOR, TYPE_LABEL, TYPE_PLURAL, Article, Detail, ensureImgs, ensureIndex, esc, findByTitle, getArticle, getDetail, imgUrl, isFace, valueHtml, epithetOf, typeIcon, loadData, nameOf, richText, rootOf, shapeIcon, typeOf, fmtN, impOf } from '../data';
+import { FEATURES } from '../config';
 import { go, parseHash, setParams } from '../nav';
 import { buildGalleries, dropBroken, galleryTables } from '../gallery';
 import { blockHtml, itemHtml, relationBlocks, keyData } from '../panel';
@@ -78,7 +79,7 @@ export class FichaView implements View {
       <header class="f-head">${photo ? `<div class="f-photo ${isFace(i) ? 'face' : 'fit'}" style="--c:${color}"><img src="${esc(photo)}" alt="${esc(name)}" referrerpolicy="no-referrer" onerror="this.parentElement.remove()"></div>` : ''}
         <div class="f-title"><span class="tagtype xl" style="--c:${color}">${typeIcon(ty, 20, '#0b1d38')} ${esc(TYPE_LABEL[ty] ?? ty)}</span><h1 class="f-h1">${esc(name)}</h1>${epithetOf(d) ? `<p class="f-sub">${esc(epithetOf(d))}</p>` : ''}
           <p class="f-lead">${richText(d.r) || ''}</p>
-          <div class="f-actions"><a class="btn" href="#/quien/${encodeURIComponent(name)}" data-go="quien|${esc(name)}">Ver su grafo de relaciones</a>${ty === 'lugar' ? `<a class="btn ghost" href="#/lugares/${encodeURIComponent(name)}" data-go="lugares|${esc(name)}">Ver en el mapa</a>` : ''}<a class="btn ghost" href="#/comparar?a=${encodeURIComponent(name)}">Comparar con…</a><button class="btn ghost" data-copy>Copiar enlace</button></div>
+          <div class="f-actions"><a class="btn" href="#/quien/${encodeURIComponent(name)}" data-go="quien|${esc(name)}">Ver su grafo de relaciones</a>${ty === 'lugar' && FEATURES.lugares ? `<a class="btn ghost" href="#/lugares/${encodeURIComponent(name)}" data-go="lugares|${esc(name)}">Ver en el mapa</a>` : ''}<a class="btn ghost" href="#/comparar?a=${encodeURIComponent(name)}">Comparar con…</a><button class="btn ghost" data-copy>Copiar enlace</button></div>
           <p class="f-first" id="f-first" hidden></p></div></header>
       <div class="f-cols">
         <nav class="toc" aria-label="Índice de la ficha"><details open class="toc-d"><summary><h2>Contenido</h2></summary>${tocHtml}<p class="toc-act"><button class="linkish" data-expandall>Desplegar todo</button> · <button class="linkish" data-collapseall>Plegar todo</button></p></details></nav>

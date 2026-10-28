@@ -5,13 +5,15 @@ export type ViewId = 'home' | 'quien' | 'sagas' | 'lugares' | 'carta' | 'bibliot
 export const VIEW_IDS: ViewId[] = ['home', 'quien', 'sagas', 'lugares', 'carta', 'biblioteca', 'comparar', 'metodologia', 'ficha', 'novedades'];
 export interface RouteState { view: ViewId; ficha: string | null; q: URLSearchParams }
 
+import { FEATURES } from './config';
 export function parseHash(h = location.hash): RouteState {
   const [path, qs] = h.replace(/^#\/?/, '').split('?');
   const parts = (path ?? '').split('/');
   const first = parts[0] === 'atlas' ? 'quien' : parts[0] === 'carta' ? 'lugares' : parts[0] ?? '';
   const rest = parts.slice(1).join('/');
   let ficha: string | null = null; try { ficha = rest ? decodeURIComponent(rest) : null; } catch { ficha = rest || null; }
-  return { view: (VIEW_IDS as string[]).includes(first) ? (first as ViewId) : 'home', ficha, q: new URLSearchParams(qs ?? '') };
+  const known = (VIEW_IDS as string[]).includes(first) && (FEATURES.lugares || (first !== 'lugares' && first !== 'carta'));
+  return known ? { view: first as ViewId, ficha, q: new URLSearchParams(qs ?? '') } : { view: 'home', ficha: null, q: new URLSearchParams() };
 }
 export const hashFor = (view: ViewId, ficha?: string | null, q?: URLSearchParams | Record<string, string> | null) => {
   const qs = q ? new URLSearchParams(q as Record<string, string>).toString() : '';

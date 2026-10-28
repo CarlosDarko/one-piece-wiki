@@ -12,18 +12,21 @@ import { LibraryView } from './views/library';
 import { NewsView } from './views/news';
 import { MethodView } from './views/method';
 import { CartaView } from './views/carta';
+import { FEATURES, LUGARES } from './config';
 import { SagasView } from './views/sagas';
 
 const perf = ((window as unknown as { __perf?: Record<string, number> }).__perf ??= {});
 document.addEventListener('DOMContentLoaded', () => { perf.dcl = Math.round(performance.now()); });
 
 const TITLES: Record<ViewId, string> = { home: 'One Piece Atlas', quien: 'Quién es quién', sagas: 'Sagas', lugares: 'Los lugares', carta: 'Los lugares', biblioteca: 'La biblioteca', comparar: 'Comparar', metodologia: 'Metodología', ficha: 'Ficha', novedades: 'Novedades' };
-const FACTORIES: Record<ViewId, () => View> = { home: () => new HomeView(), quien: () => new QuienView(), sagas: () => new SagasView(), lugares: () => new CartaView(), carta: () => new CartaView(), biblioteca: () => new LibraryView(), comparar: () => new CompareView(), metodologia: () => new MethodView(), ficha: () => new FichaView(), novedades: () => new NewsView() };
+const FACTORIES: Record<ViewId, () => View> = { home: () => new HomeView(), quien: () => new QuienView(), sagas: () => new SagasView(), lugares: () => (LUGARES ? new CartaView() : new HomeView()), carta: () => (LUGARES ? new CartaView() : new HomeView()), biblioteca: () => new LibraryView(), comparar: () => new CompareView(), metodologia: () => new MethodView(), ficha: () => new FichaView(), novedades: () => new NewsView() };
 const TAB_OF: Record<ViewId, string> = { home: '', quien: 'quien', sagas: 'sagas', lugares: 'lugares', carta: 'lugares', biblioteca: 'biblioteca', comparar: 'comparar', metodologia: 'metodologia', ficha: 'biblioteca', novedades: '' };
 let cur: { id: ViewId; view: View } | null = null;
 let token = 0;
 
+if (FEATURES.lugares) document.querySelector('#tabs a[data-v="sagas"]')?.insertAdjacentHTML('afterend', '<a href="#/lugares" data-v="lugares">Los lugares</a>');
 async function route() {
+  if (!FEATURES.lugares && /^#\/(lugares|carta)(\/|\?|$)/.test(location.hash)) history.replaceState(null, '', location.pathname + location.search + '#/');
   const my = ++token, r = parseHash(), root = document.getElementById('view')!;
   if (!cur || cur.id !== r.view) {
     cur?.view.unmount(); cur = null; closeQuiet();

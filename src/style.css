@@ -238,7 +238,7 @@ details.rel ul { list-style: none; margin: 4px 0 6px; padding: 0; display: grid;
 .bigsearch input:focus { outline: none; box-shadow: 0 0 0 5px rgba(232, 184, 74, .32), 0 10px 34px rgba(0, 0, 0, .4); } .bigsearch .mag { left: 20px; font-size: 26px; }
 .try { margin: 14px 0 0; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; align-items: center; color: var(--mut); } #examples { display: contents; }
 .stats-line, .home .stats { color: #b8cbe6; margin: 14px 0 0; font-size: 14px; } .home .stats b { color: var(--gold-2); }
-.paths { max-width: 1100px; margin: 22px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+.paths { max-width: 1100px; margin: 22px auto 0; padding: 0 24px; display: grid; grid-template-columns: repeat(var(--n, 4), 1fr); gap: 16px; }
 .path { display: flex; flex-direction: column; gap: 6px; padding: 18px; border-radius: 18px; background: linear-gradient(180deg, var(--navy-700), var(--navy-800)); border: 1px solid var(--line); text-decoration: none; color: #fff; transition: transform .15s, border-color .15s, box-shadow .15s; }
 .path:hover { transform: translateY(-4px); border-color: var(--gold); box-shadow: 0 14px 30px rgba(0, 0, 0, .4); }
 .path .ico { font-size: 28px; color: var(--gold); line-height: 1; } .path h2 { font-family: var(--serif); font-size: 22px; margin: 6px 0 0; } .path p { color: #c9d9ef; margin: 0; font-size: 14.5px; flex: 1; } .path b { color: var(--gold-2); margin-top: 8px; }
