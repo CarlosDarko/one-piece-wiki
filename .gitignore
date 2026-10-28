@@ -7,3 +7,4 @@ data/raw
 public/data
 publicar
 *.log
+data/state.json
