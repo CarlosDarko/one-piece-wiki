@@ -27,26 +27,38 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
-      - name: Caché de fichas (privada de Actions)
-        uses: actions/cache@v4
+      - name: Restaurar la caché de fichas (privada de Actions)
+        uses: actions/cache/restore@v4
         with:
           path: data/pages
-          key: pages-${{ github.run_id }}
+          key: pages-none
           restore-keys: pages-
       - name: Rastreo completo si no hay caché
         run: |
           mkdir -p data/pages
           n=$(ls data/pages | wc -l); echo "Fichas en caché: $n"
           if [ "$n" -lt 7000 ]; then echo "Sin caché: rastreo completo por la API (1 petición/s)"; MAX_ESPERA_TOTAL_MS=7200000 node scripts/supervisor.mjs; fi
+      - name: Guardar la caché justo tras el rastreo (aunque falle algo después)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/pages
+          key: pages-${{ github.run_id }}-rastreo
       - name: Detectar cambios, descargar lo nuevo y reconstruir
         run: node scripts/actualizar.mjs --sin-publicar --forzar
       - name: Pruebas de humo con Chrome
         run: node scripts/prueba-humo.mjs
+      - name: Guardar la caché final (fichas nuevas o cambiadas)
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: data/pages
+          key: pages-${{ github.run_id }}-final
       - name: Guardar el estado de la sincronización en la rama fuente
         run: |
           git config user.name "atlas-bot"; git config user.email "atlas-bot@users.noreply.github.com"
           git add data/sync.json data/novedades.json data/revs.json data/redirects.json data/catparents.json data/ultima-actualizacion.json || true
-          git diff --cached --quiet || { git commit -m "Estado de la sincronización"; git push origin fuente; }
+          git diff --cached --quiet || { git commit -m "Estado de la sincronización"; git pull --rebase origin fuente; git push origin fuente; }
       - name: Publicar en main (GitHub Pages) solo si las pruebas pasaron
         run: |
           rm -rf /tmp/sitio && git clone --depth 1 --branch main "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" /tmp/sitio
