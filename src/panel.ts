@@ -29,7 +29,7 @@ export function initPanel() {
 export function closeQuiet() { current = -1; el().hidden = true; document.body.classList.remove('panel-open'); }
 export function hidePanel() {
   closeQuiet();
-  const r = parseHash(); if (r.ficha && r.view !== 'ficha') go(r.view, null, r.q);
+  const r = parseHash(); if (r.ficha && r.view !== 'ficha' && !document.body.classList.contains('q-graph')) go(r.view, null, r.q); // en el grafo, plegar la ficha no cambia de ficha central
 }
 
 export function keyData(d: { ib: [string, string, string][] }, max = 9): [string, string][] {

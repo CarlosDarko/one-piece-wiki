@@ -35,3 +35,26 @@ function openViewer(box: HTMLElement, start: HTMLImageElement) {
   let x0 = 0; v.addEventListener('touchstart', (e) => { x0 = e.touches[0]!.clientX; }, { passive: true }); v.addEventListener('touchend', (e) => { const dx = e.changedTouches[0]!.clientX - x0; if (Math.abs(dx) > 50 && !zoomed) show(k + (dx < 0 ? 1 : -1)); }, { passive: true });
   document.addEventListener('keydown', key); document.body.classList.add('lb-open'); document.body.append(v); show(k); (v.querySelector('.lb-x') as HTMLElement).focus();
 }
+
+// La «Galería» de la wiki es una tabla gigante con una mini-tabla por imagen y el pie suelto detrás: se reconstruye como figuras consecutivas
+// (que buildGalleries agrupa en mosaicos por subsección) y se quitan las tablas envolventes.
+export function galleryTables(root: HTMLElement): void {
+  root.querySelectorAll<HTMLElement>('td').forEach((td) => {
+    const isImgTable = (n: ChildNode): n is HTMLElement => n instanceof HTMLElement && (n.tagName === 'TABLE' || (n.tagName === 'DIV' && n.classList.contains('tw'))) && !n.textContent?.trim() && !!n.querySelector('img[data-r]');
+    const kids = [...td.childNodes]; if (kids.filter(isImgTable).length < 2) return;
+    const out: Node[] = []; let cur: HTMLElement | null = null; let cap: HTMLElement | null = null;
+    for (const n of kids) {
+      if (isImgTable(n)) { cur = document.createElement('figure'); const im = n.querySelector('img[data-r]')!.cloneNode(true) as HTMLImageElement; cur.append(im); cap = document.createElement('figcaption'); cur.append(cap); out.push(cur); }
+      else if (n instanceof HTMLElement && /^H[2-6]$/.test(n.tagName)) { cur = null; cap = null; out.push(n); }
+      else if (cur && cap) { cap.append(n.cloneNode(true)); }
+      else out.push(n);
+    }
+    out.forEach((n) => { if (n instanceof HTMLElement && n.tagName === 'FIGURE') { const c = n.querySelector('figcaption'); if (c && !c.textContent?.trim()) c.remove(); } });
+    td.replaceChildren(...out);
+    const outer = td.closest('table'); if (outer && outer.querySelectorAll(':scope > tbody > tr > td').length === 1) { const wrap = outer.parentElement?.classList.contains('tw') ? outer.parentElement : outer; wrap.replaceWith(...td.childNodes); }
+  });
+  // la tabla-cabecera «Galería de X» sobra
+  root.querySelectorAll<HTMLElement>('table').forEach((t) => { if (/^Galer[ií]a de /i.test(t.textContent?.trim() ?? '') && !t.querySelector('img')) (t.parentElement?.classList.contains('tw') ? t.parentElement : t).remove(); });
+}
+// una imagen que no carga se quita junto con su tarjeta, sin dejar recuadros vacíos
+export function dropBroken(im: HTMLImageElement): void { const f = im.closest('figure'); const box = f?.parentElement; (f ?? im).remove(); if (box?.classList.contains('mosaic') && !box.querySelector('figure')) box.remove(); }

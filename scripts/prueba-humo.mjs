@@ -12,6 +12,7 @@ const results = []; const check = (name, ok, extra = '') => { results.push(ok); 
 const errors = [];
 async function page(w = 1440, h = 900, mobile = false) {
   const p = await browser.newPage(); await p.setViewport({ width: w, height: h, isMobile: mobile, hasTouch: mobile });
+  await p.evaluateOnNewDocument(() => { try { localStorage.removeItem('opa-panel'); } catch { /* sin almacenamiento */ } });
   p.on('pageerror', (e) => errors.push(e.message)); return p;
 }
 const hash = (p) => p.evaluate(() => decodeURIComponent(location.hash));
@@ -24,12 +25,12 @@ await goto(p, ''); await p.waitForSelector('.hero'); await sleep(600);
 check('Portada: 4 accesos, atajos y ejemplos clicables', (await p.$$eval('a.path', (a) => a.length)) === 4 && (await p.$$eval('.shortcuts a', (a) => a.length)) >= 8 && (await p.$$eval('#examples a', (a) => a.length)) >= 4);
 await p.type('#hq', 'gomu gomu'); await sleep(400);
 check('Portada: el buscador agrupa los resultados por tipo', (await p.$$eval('#hres .opt', (a) => a.length)) > 0 && (await p.$$eval('#hres .grp', (a) => a.length)) > 0);
-await p.keyboard.press('Enter'); await p.waitForSelector('#q-open', { timeout: 20000 }); await p.click('#q-open'); await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); await sleep(600);
+await p.keyboard.press('Enter'); await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); await sleep(600);
 const h1 = await hash(p); check('Buscar + Enter abre la ficha en #/quien/… con el panel', h1.startsWith('#/quien/'), h1);
 await p.click('details.rel a.ilink'); await sleep(1300); const h2 = await hash(p);
 check('Un enlace de la ficha navega a otra ficha', h2 !== h1 && h2.startsWith('#/quien/'), h2);
 await p.click('#pb-back'); await sleep(1000); check('El botón ← vuelve a la ficha anterior', (await hash(p)) === h1);
-await p.click('#pb-close'); await sleep(500); check('Cerrar la ficha limpia la URL y oculta el panel', !(await hash(p)).includes('/quien/') && (await p.$eval('#panel', (e) => e.hidden)));
+await p.click('#pb-close'); await sleep(500); check('Plegar la ficha en el grafo oculta el panel y conserva la ficha central en la URL', (await hash(p)).includes('/quien/') && (await p.$eval('#panel', (e) => e.hidden)));
 await p.close();
 
 // ---------- ficha completa (artículo íntegro) ----------
@@ -137,7 +138,7 @@ await p.evaluate(() => { document.getElementById('q-filt').open = true; }); awai
 check('Filtros: las categorías coloreadas se ven y las grises empiezan ocultas, con contador de ocultas', (await p.$$eval('.q-lg:not(.off)', (a) => a.length)) >= 3 && (await p.$$eval('.q-lg.off', (a) => a.length)) >= 1 && /ocultas/.test(await p.$eval('#q-fn', (e) => e.textContent)) && (await p.$eval('.q-fhelp', (e) => e.textContent)).includes('Mostrar / ocultar'));
 await p.click('#q-filt [data-g="-"]'); await sleep(300); check('Filtros: «Ocultar todo» y «Mostrar todo» funcionan', (await p.$$eval('.q-lg.off', (a) => a.length)) >= 2 && (await p.$eval('#q-fn', (e) => e.textContent)).startsWith('0 de')); await p.click('#q-filt [data-g="*"]'); await sleep(300);
 check('Filtros: la barra no se corta (sin scroll horizontal)', await p.$eval('#q-legend', (e) => e.scrollWidth <= e.clientWidth + 1));
-await p.click('#q-open'); await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); check('Grafo: la ficha se abre en el panel', true);
+await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); check('Grafo: la ficha se abre en el panel', true);
 await p.click('.q-lg'); await sleep(300); check('Grafo: la leyenda oculta un tipo de relación', (await p.$$eval('.q-lg.off', (a) => a.length)) >= 1);
 await p.evaluate(() => { document.querySelectorAll('.q-lg.off').forEach((b) => b.click()); });
 await p.evaluate(() => { const n = [...document.querySelectorAll('.qn[data-i]:not(.center)')][0]; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); }); await sleep(1200);
@@ -151,8 +152,8 @@ p = await page(); await goto(p, '#/quien/Marineford'); await p.waitForSelector('
 p = await page(); await goto(p, '#/quien?de=' + ficha('Monkey D. Luffy') + '&a=' + ficha('Edward Newgate')); await p.waitForSelector('.pchain', { timeout: 20000 }); check('Camino entre dos fichas: cadena con explicación de cada salto y alternativas', (await p.$$eval('.pcard', (a) => a.length)) >= 2 && (await p.$$eval('.ptext li', (a) => a.length)) >= 1); await p.close();
 p = await page(); await goto(p, '#/quien'); await p.waitForSelector('#pa'); await p.evaluate(() => { document.querySelector('#q-pathform').open = true; }); await p.type('#pa', 'Nami'); await sleep(300); await p.keyboard.press('Enter'); await p.type('#pb', 'Marineford'); await sleep(300); await p.keyboard.press('Enter'); await p.click('#q-pf button'); await p.waitForSelector('.pchain, .p-none', { timeout: 20000 }); check('Formulario «¿cómo se relaciona X con Y?» traza el camino', (await hash(p)).includes('de=') && (await hash(p)).includes('a=')); await p.close();
 p = await page(390, 844, true); await goto(p, '#/quien'); await p.waitForSelector('#qs'); check('Móvil: portada del buscador sin desbordes', !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
-await goto(p, '#/quien/' + ficha('Monkey D. Luffy')); await p.waitForSelector('.qn.center'); await sleep(900); check('Móvil: el grafo ocupa la pantalla y la ficha se abre con un botón', (await p.$eval('#panel', (e) => e.hidden)) && !(await p.$eval('.q-open', (e) => getComputedStyle(e).display === 'none')) && !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)));
-await p.click('.q-open'); await sleep(800); check('Móvil: «Ver la ficha» abre la hoja inferior', !(await p.$eval('#panel', (e) => e.hidden))); await p.close();
+await goto(p, '#/quien/' + ficha('Monkey D. Luffy')); await p.waitForSelector('.qn.center'); await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); await sleep(700); const mh = await p.evaluate(() => { const r = document.getElementById('panel').getBoundingClientRect(); return { h: r.height / innerHeight, cv: document.getElementById('q-canvas').getBoundingClientRect().height }; }); check('Móvil: la ficha se abre como hoja parcial (≤50% de alto) y el grafo sigue visible', !(await p.$eval('#panel', (e) => e.hidden)) && mh.h <= 0.5 && mh.cv > 120 && !(await p.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1)), JSON.stringify(mh));
+await p.click('#pb-close'); await sleep(400); const cerrada = await p.$eval('#panel', (e) => e.hidden); await p.click('.q-open'); await sleep(800); check('Móvil: se puede plegar la hoja y «Ver la ficha» la vuelve a abrir', cerrada && !(await p.$eval('#panel', (e) => e.hidden))); await p.close();
 
 
 // ---------- comparador ----------
@@ -224,11 +225,20 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   check('Amazon Lily: «Combatientes» solo con personajes u organizaciones (ni Haki ni frutas)', R.amazon.every(([l, tys]) => !/Combatiente/.test(l) || tys.every((t) => ['personaje', 'organizacion', 'animal'].includes(t))), JSON.stringify(R.amazon.filter(([l]) => /Combatiente/.test(l))));
   await p.close();
 }
+// ---------- la ficha lateral del grafo: se abre sola, se pliega y recuerda la preferencia ----------
+{
+  p = await page(1440, 900); await goto(p, '#/quien'); await p.waitForSelector('#qs'); await sleep(400); await p.type('#qs', 'Usopp'); await sleep(500); await p.keyboard.press('Enter');
+  await p.waitForSelector('.panel-body .summary', { timeout: 20000 }); await sleep(500);
+  const t1 = await p.$eval('#panel .ph h2', (e) => e.textContent); check('Buscar «Usopp»: el panel lateral se abre solo con su ficha', t1 === 'Usopp' && !(await p.$eval('#panel', (e) => e.hidden)), t1);
+  await p.click('#pb-close'); await sleep(300); await p.evaluate(() => { const n = [...document.querySelectorAll('.qn[data-i]:not(.center)')][0]; n.dispatchEvent(new MouseEvent('click', { bubbles: true })); }); await sleep(1200);
+  check('Plegado el panel, recentrar desde el grafo respeta la preferencia (sigue cerrado)', await p.$eval('#panel', (e) => e.hidden)); await p.click('.q-open'); await sleep(700);
+  check('«Ver la ficha» lo vuelve a abrir', !(await p.$eval('#panel', (e) => e.hidden))); await p.close();
+}
 // ---------- el lienzo del grafo ocupa la mayor parte de la pantalla ----------
 {
   const med = [];
   for (const [w, h, mob, min] of [[1366, 768, false, 0.7], [1440, 900, false, 0.7], [1920, 1080, false, 0.7], [390, 844, true, 0.6], [360, 640, true, 0.5], [844, 390, true, 0.5]]) {
-    const pg = await page(w, h, mob); await goto(pg, '#/quien/' + ficha('Monkey D. Luffy')); await pg.waitForSelector('.qn.center'); await sleep(900);
+    const pg = await page(w, h, mob); await pg.evaluateOnNewDocument(() => { localStorage.setItem('opa-panel', 'cerrado'); }); await goto(pg, '#/quien/' + ficha('Monkey D. Luffy')); await pg.waitForSelector('.qn.center'); await sleep(900);
     const frac = await pg.evaluate(() => { const r = document.getElementById('q-canvas').getBoundingClientRect(); return (r.width * r.height) / (innerWidth * innerHeight); }); med.push([w + 'x' + h, +frac.toFixed(2), min]); await pg.close();
   }
   check('Grafo: el lienzo ocupa ≥70% del viewport en escritorio y ≥50-60% en móvil', med.every(([, f, m]) => f >= m), med.map(([k, f]) => k + ':' + Math.round(f * 100) + '%').join(' '));
@@ -287,6 +297,9 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   await p.evaluate(() => document.querySelector('.mosaic img').click()); await sleep(500); const c1 = await p.$eval('.lb-c', (e) => e.textContent);
   await p.keyboard.press('ArrowRight'); await sleep(300); const c2 = await p.$eval('.lb-c', (e) => e.textContent); check('Visor: abre, navega con el teclado y muestra «n de N»', /^1 de \d+/.test(c1) && c2.startsWith('2 de'), c1 + ' → ' + c2);
   await p.keyboard.press('Escape'); await sleep(300); check('Visor: Esc lo cierra', !(await p.$('.lb')));
+  await goto(p, '#/ficha/' + ficha('Usopp')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(1500); await p.evaluate(() => document.querySelectorAll('details.asec').forEach((d) => (d.open = true))); await sleep(400);
+  const gal = await p.evaluate(() => { const h2 = [...document.querySelectorAll('.article details.asec > summary h2')].map((h) => h.textContent.trim()); const toc = [...document.querySelectorAll('.f-toc a, nav.toc a, .toc a')].map((x) => x.textContent.trim()); const ms = [...document.querySelectorAll('.asec[data-sec] .mosaic')].filter((m) => m.closest('.asec').querySelector('summary h2').textContent.trim() === 'Galería'); const cols = ms.map((m) => getComputedStyle(m).gridTemplateColumns.split(' ').length); const vacias = [...document.querySelectorAll('.article figure')].filter((f) => !f.querySelector('img')).length; const tablasImg = [...document.querySelectorAll('.article details.asec')].filter((d) => d.querySelector('summary h2')?.textContent.trim() === 'Galería').reduce((n, d) => n + d.querySelectorAll('table img').length, 0); return { ultima: h2[h2.length - 1], mosaicos: ms.length, minCols: Math.min(...cols), vacias, tablasImg }; });
+  check('Galería: es la última sección, en mosaicos de ≥3 columnas, sin tablas de imagen ni recuadros vacíos', gal.ultima === 'Galería' && gal.mosaicos >= 3 && gal.minCols >= 3 && gal.vacias === 0 && gal.tablasImg === 0, JSON.stringify(gal));
   await goto(p, '#/ficha/' + ficha('God Valley')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(1200);
   const sp = await p.evaluate(() => { const e = document.querySelector('.spoiler'); if (!e) return null; const cs = getComputedStyle(e); const lum = (c) => { const m = c.match(/\d+/g).map(Number); const f = m.slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; }; const a = lum(cs.color), b = lum(cs.backgroundColor); return { visible: e.offsetHeight > 20, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }; });
   check('Spoilers: el aviso existe, es visible y cumple contraste AA', !!sp && sp.visible && sp.ratio >= 4.5, JSON.stringify(sp)); await p.close();

@@ -1,7 +1,7 @@
 // Ficha completa: el artículo íntegro de la wiki (todas sus secciones), índice con anclas, infobox, relaciones y atribución.
 import { IMGS, TYPE_COLOR, TYPE_LABEL, TYPE_PLURAL, Article, Detail, ensureImgs, ensureIndex, esc, findByTitle, getArticle, getDetail, imgUrl, isFace, valueHtml, epithetOf, typeIcon, loadData, nameOf, richText, rootOf, shapeIcon, typeOf, fmtN, impOf } from '../data';
 import { go, parseHash, setParams } from '../nav';
-import { buildGalleries } from '../gallery';
+import { buildGalleries, dropBroken, galleryTables } from '../gallery';
 import { itemHtml, relationGroups, keyData } from '../panel';
 import type { View } from './view';
 
@@ -17,6 +17,7 @@ function render(html: string): string {
     .replace(/<table>/g, '<div class="tw"><table>').replace(/<\/table>/g, '</table></div>');
   const parts = linked.split(/(?=<h2 id=)/); const intro = parts[0]?.startsWith('<h2 id=') ? '' : parts.shift() ?? '';
   const open = (k: number) => (mobile() ? k < 2 : true);
+  const gi = parts.findIndex((p) => /^<h2 id="[^"]+">Galer[ií]a<\/h2>/.test(p)); if (gi >= 0 && gi < parts.length - 1) parts.push(...parts.splice(gi, 1));
   const secs = parts.map((p, k) => { const m = p.match(/^<h2 id="([^"]+)">([^<]*)<\/h2>/); if (!m) return p; return `<details class="asec" ${open(k) ? 'open' : ''} data-sec="${m[1]}"><summary><h2 id="${m[1]}">${m[2]}</h2></summary><div class="asec-b">${p.slice(m[0].length)}</div></details>`; }).join('');
   return `<div class="a-intro">${intro}</div>${secs}`;
 }
@@ -70,7 +71,7 @@ export class FichaView implements View {
     const rows = keyData({ ib: infobox as Detail['ib'] }, 14); const keys = new Set(rows.map((r) => r[0]));
     const kvAll = [...rows, ...infobox.filter((r) => !/^(nombrejap|nombrerom|nesp|nlat|vol|cap|epi|primera|actor|liveaction|ant|sig)/i.test(r[2]) && !keys.has(r[0].replace(/:$/, ''))).map((r) => [r[0].replace(/:$/, ''), r[1]] as [string, string])].slice(0, 28);
     const groups = relationGroups(d, i); const mb = [...new Set(d.mb.map(rootOf))].sort((a, b) => impOf(b) - impOf(a)).slice(0, 60);
-    const toc = (art?.t ?? []).filter((t) => t[1] <= 3);
+    const toc0 = (art?.t ?? []).filter((t) => t[1] <= 3); const g0 = toc0.findIndex((t) => t[1] === 2 && /^Galer[ií]a$/.test(t[2])); let toc = toc0; if (g0 >= 0) { let g1 = g0 + 1; while (g1 < toc0.length && toc0[g1]![1] > 2) g1++; toc = [...toc0.slice(0, g0), ...toc0.slice(g1), ...toc0.slice(g0, g1)]; }
     const tocHtml = toc.length ? `<ol>${toc.map((t) => `<li class="l${t[1]}"><a href="#/ficha/${encodeURIComponent(name)}?s=${t[0]}" data-sec="${t[0]}">${esc(t[2])}</a></li>`).join('')}</ol>` : '<p class="hint">Esta ficha no tiene secciones.</p>';
     this.root.innerHTML = `<article class="ficha"><div class="page wide">
       <nav class="crumbs" aria-label="Migas de pan"><a href="#/">Inicio</a><span>›</span><a href="#/biblioteca?t=${ty}">${esc(TYPE_PLURAL[ty] ?? ty)}</a><span>›</span><span aria-current="page">${esc(name)}</span></nav>
@@ -89,7 +90,8 @@ export class FichaView implements View {
           <section class="card-s src"><h2>Fuente y licencia</h2><p>Artículo de <a href="${esc(d.url)}" target="_blank" rel="noopener">One Piece Wiki en español (Fandom)</a>, © sus colaboradores, bajo licencia <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>. Puedes ver <a href="${esc(d.url)}?action=history" target="_blank" rel="noopener">el historial de autores</a> en Fandom. Las imágenes pertenecen a sus titulares.</p><p class="conf" title="${esc(d.why)}">Tipo asignado automáticamente · confianza ${Math.round(d.conf * 100)} %</p></section>
         </aside></div></div></article>`;
     document.title = `${name} · One Piece Atlas`;
-    for (const im of this.root.querySelectorAll<HTMLImageElement>('.article img[data-r]')) { im.src = imgUrl(im.dataset.r!, 360); im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.onerror = () => im.remove(); }
+    galleryTables(this.root.querySelector('.article') as HTMLElement);
+    for (const im of this.root.querySelectorAll<HTMLImageElement>('.article img[data-r]')) { im.src = imgUrl(im.dataset.r!, 360); im.loading = 'lazy'; im.referrerPolicy = 'no-referrer'; im.onerror = () => dropBroken(im); }
     buildGalleries(this.root.querySelector('.article') as HTMLElement);
     if (sec) setTimeout(() => this.goSection(sec), 50);
     this.spy(); void this.firstAppearance(i);

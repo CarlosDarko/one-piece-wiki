@@ -26,7 +26,7 @@ export class QuienView implements View {
   private root!: HTMLElement; private home!: HTMLElement; private stage!: HTMLElement; private pathBox!: HTMLElement; private svg!: SVGSVGElement; private vp!: SVGGElement; private disposers: (() => void)[] = [];
   private zb!: ZoomBehavior<SVGSVGElement, unknown>; private t: ZoomTransform = zoomIdentity; private ro?: ResizeObserver; private token = 0; private cur = -1; private bbox = { x0: -300, y0: -300, x1: 300, y1: 300 };
   private groups: Group[] = []; private shown = new Map<string, number>(); private center = -1; private listMode = false; private edges: { adj: Map<number, [number, number, number][]>; rels: string[] } | null = null; private chosen: [number, number] = [-1, -1];
-  canExpand = false; noAutoPanel = () => window.innerWidth < 2000;
+  canExpand = false; noAutoPanel = () => { try { return localStorage.getItem('opa-panel') === 'cerrado'; } catch { return false; } }; // la ficha lateral se abre sola salvo que el usuario la haya plegado (se recuerda)
 
   async mount(host: HTMLElement) {
     const box = document.createElement('div'); box.className = 'quien'; host.append(box); this.root = box;
@@ -76,7 +76,8 @@ export class QuienView implements View {
     this.svg.addEventListener('click', (e) => { const n = (e.target as Element).closest<SVGElement>('[data-i]'); if (n) { navigateToFicha(+n.dataset.i!); return; } const m = (e.target as Element).closest<SVGElement>('[data-more]'); if (m) this.expand(m.dataset.more!); });
     this.svg.addEventListener('keydown', (e) => { if (e.key !== 'Enter' && e.key !== ' ') return; const n = (e.target as Element).closest<SVGElement>('[data-i],[data-more]'); if (n) { e.preventDefault(); (n as unknown as HTMLElement).dispatchEvent(new MouseEvent('click', { bubbles: true })); } });
     (this.stage.querySelector('#q-full') as HTMLElement).addEventListener('click', () => { const on = document.body.classList.toggle('q-full'); try { if (on) void document.documentElement.requestFullscreen?.(); else if (document.fullscreenElement) void document.exitFullscreen(); } catch { /* sin pantalla completa nativa */ } window.setTimeout(() => this.fit(false), 120); });
-    (this.stage.querySelector('#q-open') as HTMLElement).addEventListener('click', () => void showFicha(this.center, { canExpand: false }));
+    (this.stage.querySelector('#q-open') as HTMLElement).addEventListener('click', () => { try { localStorage.removeItem('opa-panel'); } catch { /* sin almacenamiento */ } void showFicha(this.center, { canExpand: false }); });
+    const onClose = (e: Event) => { if ((e.target as HTMLElement).closest('#pb-close')) { try { localStorage.setItem('opa-panel', 'cerrado'); } catch { /* sin almacenamiento */ } } }; document.addEventListener('click', onClose, true); this.disposers.push(() => document.removeEventListener('click', onClose, true));
     (this.stage.querySelector('#q-vg') as HTMLElement).addEventListener('click', () => this.setList(false)); (this.stage.querySelector('#q-vl') as HTMLElement).addEventListener('click', () => this.setList(true));
     (this.stage.querySelector('#q-filt') as HTMLElement).addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]'); if (!b) return; if (b.dataset.g === '*') this.groups.forEach((g) => (g.hidden = false)); else if (b.dataset.g === '-') this.groups.forEach((g) => (g.hidden = true)); else { const g = this.groups.find((x) => x.key === b.dataset.g); if (g) g.hidden = !g.hidden; } this.draw(false); });
     (this.stage.querySelector('#q-list') as HTMLElement).addEventListener('click', (e) => { const m = (e.target as HTMLElement).closest<HTMLElement>('[data-more]'); if (m) { this.expand(m.dataset.more!); } });
