@@ -37,6 +37,7 @@ if (!soloPreparar && !args.has('--sin-pruebas')) { console.log('2/6 Pasando la p
 console.log('3/6 Preparando la carpeta de publicación…');
 mkdirSync(STAGE, { recursive: true });
 if (!existsSync(join(SITE, '.git'))) { rmSync(SITE, { recursive: true, force: true }); if (soloPreparar) mkdirSync(SITE, { recursive: true }); else run('git', ['clone', `https://github.com/${REPO}.git`, SITE]); }
+if (!soloPreparar && existsSync(join(SITE, '.git'))) { try { run('git', ['-C', SITE, 'fetch', 'origin', 'main']); run('git', ['-C', SITE, 'reset', '--hard', 'FETCH_HEAD']); } catch { /* sin remoto aún */ } } // la actualización automática también empuja a main: partir siempre de lo último
 for (const e of readdirSync(SITE)) if (e !== '.git' && e !== '.github') rmSync(join(SITE, e), { recursive: true, force: true });
 cpSync(join(ROOT, 'dist'), SITE, { recursive: true }); writeFileSync(join(SITE, 'README.md'), README); writeFileSync(join(SITE, '.nojekyll'), '');
 const size = dirSize(SITE), big = biggest(SITE);

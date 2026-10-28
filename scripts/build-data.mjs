@@ -243,7 +243,7 @@ for (const e of ents.values()) {
   for (const c of e.cats) { const m = c.match(/saga de (.+)$/i); if (m && result.get(e.id)?.tipo !== 'saga') addEdge(e.id, resolve('Saga de ' + m[1]), 'aparece_en'); }
 }
 // relaciones sacadas de las secciones del artículo («Familia», «Tripulación», «Aliados», «Enemigos»…): enlaces a otros personajes u organizaciones, siempre en los dos sentidos
-const SEC_REL = [[/^(familia|parientes|hermanos|padres|abuelos|hijos|linaje)/i, 'familiar_de'], [/^(aliados?|amigos?|compañeros|tripulaci[oó]n|nakama|alianza)/i, 'companero_de'], [/^(enemigos?|rivales?|oponentes|antagonistas)/i, 'enemigo_de']];
+const SEC_REL = [[/^(familia|parientes|hermanos|padres|abuelos|hijos|linaje)$/i, 'familiar_de']]; // solo títulos exactos; el resto de vínculos se decide por el primer párrafo de cada personaje de «Relaciones»
 const HEADFULL = new RegExp('^<h([2-4]) id="[^"]*">(.*?)<' + '/h[2-4]>');
 const HEAD = new RegExp('^<h([2-4]) id="[^"]*">([^<]*)<');
 let secEdges = 0;
@@ -258,7 +258,7 @@ for (const e of ents.values()) {
 }
 console.log('relaciones desde secciones del artículo:', secEdges);
 // sección «Relaciones» de personajes: cada subtítulo (h3/h4) es el nombre de otro personaje u organización; el tipo de vínculo sale de las palabras de su primer párrafo
-const KIN = /herman[oa]s?|abuel[oa]|padre|madre|hij[oa]\b|t[ií]o\b|primo|sobrin|familiar|hermano jurado|cuñad|esposa|esposo/i, FOE = /rival|enemig|archienemig|antagonista|nemesis|némesis/i, FRIEND = /compa[ñn]ero|aliad[oa]|amig[oa]|tripulante|nakama|miembro de (?:su|la) tripulaci/i;
+const KIN = /\b(herman[oa]s?|abuel[oa]|padre|madre|hij[oa]s?|nieto|nieta|t[ií]o|prim[oa]|sobrin[oa]|esposa|esposo|cuñad[oa])\b/i, FOE = /\b(enemig[oa]s?|archienemig[oa]|antagonista|némesis|nemesis)\b/i, ALLY = /\b(aliad[oa]s?|alianza)\b/i, FRIEND = /\b(amig[oa]s?)\b/i;
 const TAGS = new RegExp('<[^>]+>', 'g'); let relEdges = 0;
 for (const e of ents.values()) {
   const own = e.id.includes('/') ? e.id.split('/')[0] : e.id; const ty = result.get(own)?.tipo; if (ty !== 'personaje' && ty !== 'organizacion') continue;
@@ -267,7 +267,7 @@ for (const e of ents.values()) {
     const m = p.match(HEADFULL); if (!m) continue; const lvl = +m[1], text = m[2].replace(TAGS, '').replace(/&amp;/g, '&').trim();
     if (lvl === 2) { inRel = /^relaciones/i.test(text); continue; } if (!inRel || lvl < 3) continue;
     const t = resolve(text.replace(/\([^)]*\)/g, '').trim()); if (!t || t === own) continue; const tt = result.get(t)?.tipo; if (tt !== 'personaje' && tt !== 'organizacion') continue;
-    const body = p.slice(m[0].length).replace(TAGS, ' ').replace(/\s+/g, ' ').slice(0, 420); const rel = KIN.test(body) ? 'familiar_de' : FOE.test(body) ? 'enemigo_de' : FRIEND.test(body) ? 'companero_de' : null; if (!rel) continue;
+    const body0 = p.slice(m[0].length).replace(TAGS, ' ').replace(/\s+/g, ' ').trim(); const dot = body0.indexOf('. '); const body = body0.slice(0, dot > 40 ? Math.min(dot, 260) : 220); const rel = KIN.test(body) ? 'familiar_de' : FOE.test(body) ? 'enemigo_de' : ALLY.test(body) ? 'aliado_de' : FRIEND.test(body) ? 'amigo_de' : null; if (!rel) continue;
     addEdge(own, t, rel); addEdge(t, own, rel); relEdges++;
   }
 }

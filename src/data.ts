@@ -49,7 +49,7 @@ export const TYPE_ICON: Record<string, string> = {
 export const FACE_TYPES = new Set(['personaje', 'animal', 'persona_real', 'raza']);
 // aristas: color, grosor y trazo por relación
 export const REL_STYLE: Record<string, { c: string; w: number; d?: string }> = {
-  miembro_de: { c: '#59c98b', w: 1.8 }, companero_de: { c: '#2dd4bf', w: 2 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
+  miembro_de: { c: '#59c98b', w: 1.8 }, companero_de: { c: '#2dd4bf', w: 2 }, tripulacion_de: { c: '#2dd4bf', w: 2.4 }, aliado_de: { c: '#38bdf8', w: 2 }, amigo_de: { c: '#a3e635', w: 2 }, coincidido_con: { c: '#8aa0bd', w: 1.2 }, mascota_de: { c: '#f59e0b', w: 2 }, enemigo_de: { c: '#ef4444', w: 2.2 }, enfrenta_a: { c: '#ff9f43', w: 2.2 }, capitan_de: { c: '#f2b84b', w: 2.8 }, usa_barco: { c: '#4bb3f2', w: 2 }, come: { c: '#e8566c', w: 2 }, evoluciona_en: { c: '#ff8a3d', w: 2.6, d: '7 4' }, familiar_de: { c: '#ff7ac0', w: 1.8 },
   originario_de: { c: '#b48cf2', w: 1.5, d: '5 4' }, reside_en: { c: '#b48cf2', w: 1.5, d: '5 4' }, en_region: { c: '#b48cf2', w: 1.5, d: '5 4' }, base_en: { c: '#b48cf2', w: 1.5, d: '5 4' },
   parte_de: { c: '#ffb27a', w: 1.8 }, anterior: { c: '#ffb27a', w: 1.8 }, siguiente: { c: '#ffb27a', w: 1.8 }, dirigido_por: { c: '#9aa7ff', w: 1.8 }, menciona: { c: '#c5d6ee', w: 1.1, d: '2 4' },
 };
@@ -62,7 +62,7 @@ export const REL_LABEL: Record<string, [string, string]> = {
   doblado_por: ['Doblado por', 'Dobla a'], en_region: ['Región', 'Contiene'], dirigido_por: ['Dirigido por', 'Dirige'], clase: ['Clase', 'Incluye'], base_en: ['Base en', 'Base de'], de_nacion: ['Nación', 'Naciones'],
   propiedad_de: ['Propiedad de', 'Propietario'], relacionado: ['Relacionado con', 'Relacionado con'], categorizado_en: ['Categoría', 'En esta categoría'], menciona: ['Se mencionan', 'Se mencionan'],
 };
-export const REL_ORDER = ['miembro_de', 'capitan_de', 'familiar_de', 'companero_de', 'enemigo_de', 'enfrenta_a', 'usa_barco', 'come', 'evoluciona_en', 'familiar_de', 'originario_de', 'reside_en', 'parte_de', 'combatiente_en', 'ocurre_en', 'base_en', 'dirigido_por', 'es_de_raza', 'anterior', 'siguiente', 'aparece_en', 'primera_aparicion', 'clase', 'doblado_por', 'en_region', 'de_nacion', 'propiedad_de', 'relacionado'];
+export const REL_ORDER = ['miembro_de', 'capitan_de', 'familiar_de', 'tripulacion_de', 'mascota_de', 'aliado_de', 'amigo_de', 'enemigo_de', 'enfrenta_a', 'coincidido_con', 'usa_barco', 'come', 'evoluciona_en', 'familiar_de', 'originario_de', 'reside_en', 'parte_de', 'combatiente_en', 'ocurre_en', 'base_en', 'dirigido_por', 'es_de_raza', 'anterior', 'siguiente', 'aparece_en', 'primera_aparicion', 'clase', 'doblado_por', 'en_region', 'de_nacion', 'propiedad_de', 'relacionado'];
 export const WEAK = new Set(['categorizado_en', 'primera_aparicion', 'aparece_en', 'es_de_raza', 'clase', 'relacionado', 'doblado_por']);
 
 export const esc = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
@@ -133,14 +133,14 @@ const SELF: Record<string, Forms> = {
   usa_barco: ['Barco', 'Barco', 'Barcos'], come: ['Fruta del Diablo', 'Fruta del Diablo', 'Frutas del Diablo'], familiar_de: ['Familia', 'Familia', 'Familia'], es_de_raza: ['Raza', 'Raza', 'Raza'],
   base_en: ['Base en', 'Base en', 'Bases en'], ocurre_en: ['Ocurre en', 'Ocurre en', 'Ocurre en'], en_region: ['Región', 'Región', 'Región'], de_nacion: ['Nación', 'Nación', 'Nación'],
   parte_de: ['Parte de', 'Parte de', 'Parte de'], evoluciona_en: ['Evoluciona en', 'Evoluciona en', 'Evoluciona en'], primera_aparicion: ['Primera aparición', 'Primera aparición', 'Primera aparición'],
-  anterior: ['Anterior', 'Anterior', 'Anterior'], siguiente: ['Siguiente', 'Siguiente', 'Siguiente'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Menciona', 'Menciona', 'Mencionan'],
+  anterior: ['Anterior', 'Anterior', 'Anterior'], siguiente: ['Siguiente', 'Siguiente', 'Siguiente'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Menciona', 'Menciona', 'Mencionan'], mascota_de: ['Mascotas y compañeros animales', 'Mascotas y compañeros animales', 'Mascotas y compañeros animales'],
 };
 const OTHER: Record<string, [string, string]> = {
   miembro_de: ['Miembro', 'Miembros'], capitan_de: ['Capitán', 'Capitanes'], propiedad_de: ['Pertenece a', 'Pertenece a'], originario_de: ['Natural de aquí', 'Naturales de aquí'], reside_en: ['Residente', 'Residentes'],
   combatiente_en: ['Combatiente', 'Combatientes'], aparece_en: ['Aparece aquí', 'Aparecen aquí'], doblado_por: ['Doblaje de', 'Doblaje de'], dirigido_por: ['Dirige', 'Dirige'], usa_barco: ['Usado por', 'Usado por'],
   come: ['Usuario', 'Usuarios'], familiar_de: ['Familia', 'Familia'], es_de_raza: ['Miembro de la raza', 'Miembros de la raza'], base_en: ['Sede de', 'Sede de'], ocurre_en: ['Escenario de', 'Escenario de'],
   en_region: ['Incluye', 'Incluye'], de_nacion: ['Incluye', 'Incluye'], parte_de: ['Incluye', 'Incluye'], evoluciona_en: ['Evoluciona de', 'Evoluciona de'], primera_aparicion: ['Primera aparición de', 'Primera aparición de'],
-  anterior: ['Siguiente', 'Siguiente'], siguiente: ['Anterior', 'Anterior'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Mencionado en', 'Mencionados en'],
+  anterior: ['Siguiente', 'Siguiente'], siguiente: ['Anterior', 'Anterior'], relacionado: ['Otras fichas relacionadas', 'Otras fichas relacionadas'], menciona: ['Mencionado en', 'Mencionados en'], mascota_de: ['Compañero de', 'Compañeros de'],
 };
 const PLURAL_NAME = /^(Piratas|Los |Las |Marines|Cazadores|Revolucionarios|Samuráis|Ninjas|Gigantes|Hermanos|Tribu|Clan|Escuadrón)/;
 const FEM_ORG = /^(Alianza|Marina|Familia|Banda|Tripulación|Flota|Armada|Organización|Tribu|Compañía)/;
@@ -151,7 +151,7 @@ export function subjOf(i: number): { g: 'm' | 'f'; pl: boolean } {
 }
 /** Etiqueta natural de una relación vista desde la ficha `self`; `dir` 0 = la ficha es el origen; `count` = nº de fichas del grupo */
 export function relLabel(rel: string, dir: number, self: number, count = 1): string {
-  const SYM: Record<string, string> = { familiar_de: 'Familia', companero_de: 'Compañeros', enemigo_de: 'Enemigos', enfrenta_a: 'Enfrentamientos' }; if (SYM[rel]) return SYM[rel]!;
+  const SYM: Record<string, string> = { familiar_de: 'Familia', companero_de: 'Compañeros', tripulacion_de: 'Tripulación', aliado_de: 'Aliados', amigo_de: 'Amigos', coincidido_con: 'Han coincidido', enemigo_de: 'Enemigos', enfrenta_a: 'Enfrentamientos' }; if (SYM[rel]) return SYM[rel]!;
   if (dir === 0) { const f = SELF[rel]; if (!f) return rel.replace(/_/g, ' '); const s = subjOf(self); return s.pl ? f[2] : s.g === 'f' ? f[1] : f[0]; }
   if (rel === 'menciona') { const s = subjOf(self); return s.pl ? 'Mencionados en' : s.g === 'f' ? 'Mencionada en' : 'Mencionado en'; }
   const o = OTHER[rel]; if (!o) return rel.replace(/_/g, ' '); return count > 1 ? o[1] : o[0];
@@ -159,7 +159,7 @@ export function relLabel(rel: string, dir: number, self: number, count = 1): str
 // nombre legible de las subpáginas («Arco de X/Enfrentamientos» → «Enfrentamientos: Arco de X»)
 export const shownName = (i: number): string => { const n = nameOf(i), k = n.indexOf('/'); return k < 0 ? n : `${n.slice(k + 1)}: ${n.slice(0, k)}`; };
 // categorías secundarias (tono gris): ocultas por defecto en el grafo
-export const GREY_RELS = new Set(['combatiente_en', 'propiedad_de', 'es_de_raza', 'primera_aparicion', 'aparece_en', 'doblado_por', 'relacionado', 'menciona', 'categorizado_en', 'clase']);
+export const GREY_RELS = new Set(['combatiente_en', 'propiedad_de', 'es_de_raza', 'primera_aparicion', 'aparece_en', 'doblado_por', 'relacionado', 'menciona', 'categorizado_en', 'clase', 'coincidido_con']);
 export const plural = (n: number, uno: string, varios: string) => `${fmtN(n)} ${n === 1 ? uno : varios}`;
 // «Epíteto» se muestra como «Alias» en todos los datos de ficha (el texto de los artículos de la wiki no se toca)
 export const fieldLabel = (l: string) => l.replace(/^Epítetos?(?=\W|$)/i, 'Alias');

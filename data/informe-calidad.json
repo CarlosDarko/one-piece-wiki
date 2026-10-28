@@ -32,7 +32,7 @@
  },
  "confianza_baja_menor_0_5": 0,
  "asignadas_por_defecto": 0,
- "aristas_tipadas": 35396,
+ "aristas_tipadas": 35728,
  "por_relacion": {
   "en_region": 398,
   "dirigido_por": 95,
@@ -42,7 +42,7 @@
   "aparece_en": 3439,
   "reside_en": 1728,
   "categorizado_en": 3815,
-  "familiar_de": 758,
+  "familiar_de": 1090,
   "anterior": 224,
   "siguiente": 220,
   "es_de_raza": 1988,
