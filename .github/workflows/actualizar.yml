@@ -47,7 +47,8 @@ jobs:
       - name: Detectar cambios, descargar lo nuevo y reconstruir
         run: node scripts/actualizar.mjs --sin-publicar --forzar
       - name: Pruebas de humo con Chrome
-        run: node scripts/prueba-humo.mjs || { echo "Primer intento fallido (puede ser lentitud del runner): reintento una vez"; node scripts/prueba-humo.mjs; }
+        run: |
+          node scripts/prueba-humo.mjs || { echo "Primer intento fallido (puede ser lentitud del runner), reintento una vez"; node scripts/prueba-humo.mjs; }
       - name: Guardar la caché final (fichas nuevas o cambiadas)
         if: always()
         uses: actions/cache/save@v4
