@@ -105,6 +105,18 @@ await p.close();
   const lm = await p.evaluate(() => { const d = document.getElementById('c-leg'); const r = d.getBoundingClientRect(); return { cerrada: !d.open, w: Math.round(r.width), h: Math.round(r.height) }; });
   check('Carta (móvil): la leyenda empieza plegada y compacta, y se despliega al tocarla', lm.cerrada && lm.w <= 170 && lm.h <= 60 && (await (async () => { await p.click('#c-leg > summary'); await sleep(300); return p.$eval('#c-leg', (e) => e.open && e.getBoundingClientRect().height > 120); })()), JSON.stringify(lm)); await p.close();
 }
+// ---------- animación del recorrido: play avanza, pausa detiene, reiniciar vuelve a 0, llega a la última parada ----------
+{
+  p = await page(); await goto(p, '#/lugares'); await p.waitForSelector('#r-play'); await sleep(500);
+  const info = () => p.$eval('#r-info', (e) => e.textContent); const txt = (s) => p.waitForFunction((x) => document.getElementById('r-info').textContent.startsWith(x), { timeout: 30000 }, s).then(() => true, () => false);
+  await p.select('#r-speed', '4').catch(() => {}); await p.evaluate(() => { document.getElementById('r-speed').value = '4'; }); await p.click('#r-play');
+  const a1 = await txt('1/31'); const a2 = await txt('3/31'); check('Ruta: «Ruta del viaje» avanza sola de parada en parada', a1 && a2);
+  await p.click('#r-pp'); await sleep(300); const quieto = await info(); await sleep(1800); check('Ruta: la pausa detiene la animación', quieto === (await info()), quieto.slice(0, 30));
+  await p.click('#r-pp'); const fin = await txt('31/31'); check('Ruta: llega a la última parada (31/31, tramo más reciente)', fin);
+  await p.evaluate(() => document.querySelector('#r-stops button[data-n="9"]').click()); await sleep(500); check('Ruta: pulsar una parada salta a ella', (await info()).startsWith('10/31'));
+  await p.click('#r-reset'); await sleep(500); const rs = await p.evaluate(() => ({ info: document.getElementById('r-info').textContent, activa: document.querySelectorAll('#r-stops button.on').length, hechas: document.querySelectorAll('#r-stops button.done').length, barco: document.querySelector('.c-ship')?.getAttribute('visibility') }));
+  check('Ruta: reiniciar vuelve a la parada 0 y oculta el barco', rs.activa === 0 && rs.hechas === 0 && rs.barco === 'hidden' && rs.info.startsWith('Sigue el rumbo'), JSON.stringify(rs)); await p.close();
+}
 // ---------- la leyenda de la carta se ve entera, sin scroll, en 6 tamaños ----------
 {
   const mal = [];
