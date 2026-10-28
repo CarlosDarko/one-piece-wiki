@@ -5,7 +5,7 @@ import { zoom, zoomIdentity, type ZoomBehavior, type ZoomTransform } from 'd3-zo
 import { select } from 'd3-selection';
 import { IDX, IMGS, REL_LABEL, REL_ORDER, TYPE_COLOR, TYPE_LABEL, avatarHtml, relLabel, shownName, GREY_RELS, ensureImgs, ensureIndex, esc, fmtN, findByTitle, getDetail, imgUrl, impOf, initials, isFace, loadData, nameOf, relStyle, rootOf, typeOf, type Detail } from '../data';
 import { go, navigateToFicha, parseHash } from '../nav';
-import { showFicha } from '../panel';
+import { KIN_RELS, kinSubLabel, showFicha } from '../panel';
 import { attachSearch, searchIndex } from '../search';
 import type { View } from './view';
 
@@ -13,7 +13,7 @@ const NS = 'http://www.w3.org/2000/svg';
 const el = (tag: string, attrs: Record<string, string | number> = {}, parent?: Element) => { const e = document.createElementNS(NS, tag); for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, String(v)); parent?.append(e); return e; };
 const reduce = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const ex = (s: string, n: number) => (s.length > n ? s.slice(0, n - 1) + '…' : s);
-interface Group { key: string; label: string; color: string; rel: string; ids: number[]; weak: boolean; hidden: boolean }
+interface Group { key: string; label: string; color: string; rel: string; dir?: number; ids: number[]; weak: boolean; hidden: boolean; subs?: Group[] }
 interface PlacedNode { i: number; x: number; y: number; r: number; g: Group | null; more?: Group; extra?: number }
 interface EdgesData { rels: string[]; e: number[] }
 const WEAKREL = new Set(['primera_aparicion', 'aparece_en', 'es_de_raza', 'clase', 'relacionado', 'doblado_por']);
@@ -33,7 +33,7 @@ export class QuienView implements View {
     await Promise.all([ensureIndex(), ensureImgs()]);
     box.innerHTML = `<h1 class="sr">Quién es quién: busca cualquier ficha y mira su red de relaciones</h1><section class="q-home" id="q-home" aria-label="Buscar una ficha"></section><section class="q-path" id="q-path" hidden aria-live="polite"></section><section class="q-stage" id="q-stage" hidden aria-label="Grafo de relaciones"></section>`;
     this.home = box.querySelector('#q-home') as HTMLElement; this.pathBox = box.querySelector('#q-path') as HTMLElement; this.stage = box.querySelector('#q-stage') as HTMLElement;
-    (window as unknown as { __qCount: number; __qFind: (n: string) => number | undefined }).__qCount = IDX!.n.length; (window as unknown as { __qFind: (n: string) => number | undefined; __qType: (i: number) => string }).__qFind = (n) => findByTitle(n); (window as unknown as { __qType: (i: number) => string }).__qType = (i) => typeOf(i); (window as unknown as { __qName: (i: number) => string }).__qName = (i) => nameOf(i); (window as unknown as { __qGroups: (i: number) => Promise<[string, number[]][]> }).__qGroups = async (i) => (this.buildGroups(i, await getDetail(i))).map((g) => [g.label, g.ids]);
+    (window as unknown as { __qCount: number; __qFind: (n: string) => number | undefined }).__qCount = IDX!.n.length; (window as unknown as { __qFind: (n: string) => number | undefined; __qType: (i: number) => string }).__qFind = (n) => findByTitle(n); (window as unknown as { __qType: (i: number) => string }).__qType = (i) => typeOf(i); (window as unknown as { __qName: (i: number) => string }).__qName = (i) => nameOf(i); (window as unknown as { __qGroups: (i: number) => Promise<[string, number[]][]> }).__qGroups = async (i) => (this.buildGroups(i, await getDetail(i))).flatMap((g) => (g.subs ? [g, ...g.subs] : [g])).map((g) => [g.label, g.ids]);
     await this.renderHome();
     this.buildStage();
   }
@@ -79,7 +79,7 @@ export class QuienView implements View {
     (this.stage.querySelector('#q-open') as HTMLElement).addEventListener('click', () => { try { localStorage.removeItem('opa-panel'); } catch { /* sin almacenamiento */ } void showFicha(this.center, { canExpand: false }); });
     const onClose = (e: Event) => { if ((e.target as HTMLElement).closest('#pb-close')) { try { localStorage.setItem('opa-panel', 'cerrado'); } catch { /* sin almacenamiento */ } } }; document.addEventListener('click', onClose, true); this.disposers.push(() => document.removeEventListener('click', onClose, true));
     (this.stage.querySelector('#q-vg') as HTMLElement).addEventListener('click', () => this.setList(false)); (this.stage.querySelector('#q-vl') as HTMLElement).addEventListener('click', () => this.setList(true));
-    (this.stage.querySelector('#q-filt') as HTMLElement).addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]'); if (!b) return; if (b.dataset.g === '*') this.groups.forEach((g) => (g.hidden = false)); else if (b.dataset.g === '-') this.groups.forEach((g) => (g.hidden = true)); else { const g = this.groups.find((x) => x.key === b.dataset.g); if (g) g.hidden = !g.hidden; } this.draw(false); });
+    (this.stage.querySelector('#q-filt') as HTMLElement).addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLElement>('[data-g]'); if (!b) return; if (b.dataset.g === '*') this.groups.forEach((g) => { g.hidden = false; g.subs?.forEach((s) => (s.hidden = false)); }); else if (b.dataset.g === '-') this.groups.forEach((g) => { g.hidden = true; g.subs?.forEach((s) => (s.hidden = true)); }); else { const all = this.groups.flatMap((g) => (g.subs ? [g, ...g.subs] : [g])); const g = all.find((x) => x.key === b.dataset.g); if (g) { g.hidden = !g.hidden; if (g.subs) g.subs.forEach((s) => (s.hidden = g.hidden)); else { const par = this.groups.find((x) => x.subs?.includes(g)); if (par) par.hidden = par.subs!.every((s) => s.hidden); } if (g.subs === undefined && !g.hidden) { const par = this.groups.find((x) => x.subs?.includes(g)); if (par) par.hidden = false; } } } this.draw(false); });
     (this.stage.querySelector('#q-list') as HTMLElement).addEventListener('click', (e) => { const m = (e.target as HTMLElement).closest<HTMLElement>('[data-more]'); if (m) { this.expand(m.dataset.more!); } });
   }
   private setList(l: boolean) { this.listMode = l; (this.stage.querySelector('#q-canvas') as HTMLElement).hidden = l; (this.stage.querySelector('#q-list') as HTMLElement).hidden = !l; (this.stage.querySelector('#q-vg') as HTMLElement).setAttribute('aria-pressed', String(!l)); (this.stage.querySelector('#q-vl') as HTMLElement).setAttribute('aria-pressed', String(l)); if (l) this.renderList(); else this.fit(false); }
@@ -99,26 +99,46 @@ export class QuienView implements View {
     const seen = new Set<number>([self]); const gm = new Map<string, Group>(); const order = (rel: string) => { const k = REL_ORDER.indexOf(rel); return k < 0 ? 99 : k; };
     const rows = d.rl.map(([r, j, dir]) => ({ rel: IDX!.rels[r]!, j: rootOf(j), dir })).filter((x) => x.rel !== 'categorizado_en').sort((a, b) => order(a.rel) - order(b.rel) || a.dir - b.dir);
     const SOCIAL = new Set(['familiar_de', 'companero_de', 'tripulacion_de', 'aliado_de', 'amigo_de', 'coincidido_con', 'mascota_de', 'enemigo_de', 'enfrenta_a']); const inG = new Set<string>();
-    for (const x of rows) { const soc = SOCIAL.has(x.rel); if (x.j < 0 || (!soc && seen.has(x.j))) continue; if (soc) { const kk = x.rel + '|' + x.j; if (inG.has(kk)) continue; inG.add(kk); } else seen.add(x.j); const lab = '§' + x.rel + '|' + x.dir; const key = lab; let g = gm.get(key); if (!g) { g = { key, label: lab, color: relStyle(x.rel).c, rel: x.rel, ids: [], weak: WEAKREL.has(x.rel), hidden: false }; gm.set(key, g); } g.ids.push(x.j); }
+    for (const x of rows) { const soc = SOCIAL.has(x.rel); if (x.j < 0 || (!soc && seen.has(x.j))) continue; if (soc) { const kk = x.rel + '|' + x.j; if (inG.has(kk)) continue; inG.add(kk); } else seen.add(x.j); const lab = '§' + x.rel + '|' + x.dir; const key = lab; let g = gm.get(key); if (!g) { g = { key, label: lab, color: relStyle(x.rel).c, rel: x.rel, dir: x.dir, ids: [], weak: WEAKREL.has(x.rel), hidden: false }; gm.set(key, g); } g.ids.push(x.j); }
     const add = (key: string, label: string, ids: number[]) => { const u = [...new Set(ids.map(rootOf))].filter((j) => !seen.has(j)); u.forEach((j) => seen.add(j)); if (u.length) gm.set(key, { key, label, color: '#9fb4d0', rel: 'menciona', ids: u, weak: true, hidden: false }); };
     add('m|0', '§menciona|0', d.m); add('m|1', '§menciona|1', d.mb);
     const gs0 = [...gm.values()]; const byLab = new Map<string, Group>(); for (const g of gs0) { g.ids.sort((a, b) => impOf(b) - impOf(a)); const [rl, dr] = g.label.slice(1).split('|'); const lab = relLabel(rl!, +dr!, self, g.ids.length, g.ids); const ex = byLab.get(lab); if (ex) { ex.ids = [...new Set([...ex.ids, ...g.ids])].sort((a, b) => impOf(b) - impOf(a)); } else { g.label = lab; g.key = lab; byLab.set(lab, g); } } const gs = [...byLab.values()];
-    return gs.sort((a, b) => (a.weak ? 1 : 0) - (b.weak ? 1 : 0)); // las estructuradas primero; el orden interno ya sigue REL_ORDER
+    // «Familia» es una categoría padre con subgrupos por parentesco (Padres, Hermanos, Abuelos…), ordenados por cercanía
+    const kin = gs.filter((g) => KIN_RELS.includes(g.rel)); let res = gs;
+    if (kin.length >= 2 || (kin.length === 1 && kin[0]!.rel !== 'familiar_de')) {
+      const ord = (g: Group) => { const r = KIN_RELS.indexOf(g.rel); const dd = g.rel === 'progenitor_de' || g.rel === 'progenitor_adoptivo_de' ? (g.dir === 1 ? 0 : 1) : (g.dir ?? 0); return r * 2 + dd; };
+      const subs = [...kin].sort((a, b) => ord(a) - ord(b)); subs.forEach((s) => { s.label = kinSubLabel(s); s.key = s.label; });
+      const parent: Group = { key: 'Familia', label: 'Familia', color: relStyle('familiar_de').c, rel: 'familiar_de', ids: [...new Set(kin.flatMap((g) => g.ids))], weak: false, hidden: false, subs };
+      res = []; let put = false; for (const g of gs) { if (KIN_RELS.includes(g.rel)) { if (!put) { res.push(parent); put = true; } } else res.push(g); }
+    }
+    return res.sort((a, b) => (a.weak ? 1 : 0) - (b.weak ? 1 : 0)); // las estructuradas primero; el orden interno ya sigue REL_ORDER
   }
 
   // ---------- disposición por capas: un sector por tipo de relación ----------
-  private layout(): { nodes: PlacedNode[]; pills: { x: number; y: number; w: number; g: Group; rest: number }[] } {
-    const gs = this.groups.filter((g) => !g.hidden); const nodes: PlacedNode[] = [{ i: this.center, x: 0, y: 0, r: 60, g: null }]; const pills: { x: number; y: number; w: number; g: Group; rest: number }[] = [];
-    const items = gs.map((g) => { const many = this.groups.length > 6; const cap = this.shown.get(g.key) ?? (many ? (g.weak ? 3 : 6) : g.weak ? 6 : BASE_SHOWN); const vis = g.ids.slice(0, cap); return { g, vis, rest: g.ids.length - vis.length }; });
-    const weight = items.map((x) => x.vis.length + (x.rest > 0 ? 1 : 0) + 1.6); const tot = weight.reduce((a, b) => a + b, 0) || 1; let a0 = -Math.PI / 2;
+  private layout(): { nodes: PlacedNode[]; pills: { x: number; y: number; w: number; g: Group; rest: number; from?: { x: number; y: number } }[] } {
+    type P = { x: number; y: number; w: number; g: Group; rest: number; from?: { x: number; y: number } };
+    const gs = this.groups.filter((g) => !g.hidden); const nodes: PlacedNode[] = [{ i: this.center, x: 0, y: 0, r: 60, g: null }]; const pills: P[] = [];
+    const many = this.groups.length > 6; const capOf = (g: Group) => this.shown.get(g.key) ?? (many ? (g.weak ? 3 : 6) : g.weak ? 6 : BASE_SHOWN);
+    interface Item { g: Group; vis: number[]; rest: number; w: number; subs?: { g: Group; open: boolean; vis: number[]; rest: number; w: number }[] }
+    const items: Item[] = gs.map((g) => {
+      if (g.subs) { const vs = g.subs.filter((s) => !s.hidden); const expAll = g.ids.length <= 8; const subs = vs.map((s) => { const open = expAll || this.shown.has(s.key); const vis = open ? s.ids.slice(0, this.shown.get(s.key) ?? BASE_SHOWN) : []; const rest = s.ids.length - vis.length; return { g: s, open, vis, rest, w: vis.length + (rest > 0 ? 1 : 0) + 1.8 }; }); return { g, vis: [], rest: 0, subs, w: subs.reduce((a, b) => a + b.w, 0) + 1 }; }
+      const vis = g.ids.slice(0, capOf(g)); const rest = g.ids.length - vis.length; return { g, vis, rest, w: vis.length + (rest > 0 ? 1 : 0) + 1.6 };
+    });
+    const tot = items.reduce((a, b) => a + b.w, 0) || 1; let a0 = -Math.PI / 2;
+    const putNodes = (g: Group, vis: number[], rest: number, from: number, th: number, r0: number) => {
+      const list: (number | 'more')[] = [...vis, ...(rest > 0 ? (['more'] as const) : [])]; let placed = 0, ring = 0;
+      while (placed < list.length) { const r = r0 + ring * 118; const cap = Math.max(1, Math.floor((r * th) / SP)); const take = Math.min(cap, list.length - placed); for (let c = 0; c < take; c++) { const a = from + (th * (c + 0.5)) / take; const v = list[placed + c]!; if (v === 'more') nodes.push({ i: -1, x: Math.cos(a) * r, y: Math.sin(a) * r, r: 28, g, more: g, extra: rest }); else nodes.push({ i: v, x: Math.cos(a) * r, y: Math.sin(a) * r, r: 31, g }); } placed += take; ring++; }
+    };
     items.forEach((it, k) => {
-      const th = (weight[k]! / tot) * Math.PI * 2; const am = a0 + th / 2; const label = `${it.g.label} · ${it.g.ids.length}`; const w = label.length * 7.4 + 44;
+      const th = (it.w / tot) * Math.PI * 2; const am = a0 + th / 2; const label = `${it.g.label} · ${it.g.ids.length}`; const w = label.length * 7.4 + 44;
       // nivel 2: la pastilla del grupo, lo bastante lejos del centro para que quepa en su sector (y alternando radio con las vecinas)
-      const pr = Math.min(230, Math.max(125 + (k % 2) * 34, (w + 12) / Math.max(th, 0.2)));
-      pills.push({ x: Math.cos(am) * pr, y: Math.sin(am) * pr, w, g: it.g, rest: it.rest });
-      // nivel 3: los nodos del grupo, en anillos dentro de su sector, siempre más allá de la pastilla
-      const list: (number | 'more')[] = [...it.vis, ...(it.rest > 0 ? (['more'] as const) : [])]; let placed = 0, ring = 0; const r0 = Math.max(300, pr + 135);
-      while (placed < list.length) { const r = r0 + ring * 118; const cap = Math.max(1, Math.floor((r * th) / SP)); const take = Math.min(cap, list.length - placed); for (let c = 0; c < take; c++) { const a = a0 + (th * (c + 0.5)) / take; const v = list[placed + c]!; if (v === 'more') nodes.push({ i: -1, x: Math.cos(a) * r, y: Math.sin(a) * r, r: 28, g: it.g, more: it.g, extra: it.rest }); else nodes.push({ i: v, x: Math.cos(a) * r, y: Math.sin(a) * r, r: 31, g: it.g }); } placed += take; ring++; }
+      const pr = Math.min(230, Math.max(125 + (k % 3) * 38, (w + 12) / Math.max(th, 0.2)));
+      const pp: P = { x: Math.cos(am) * pr, y: Math.sin(am) * pr, w, g: it.g, rest: 0 }; pills.push(pp);
+      if (it.subs) {
+        // nivel 3: subpastillas por parentesco colgando de «Familia»; nivel 4: los nodos de cada subgrupo (plegados con contador si son muchos)
+        const tw = it.subs.reduce((a, b) => a + b.w, 0) || 1; let s0 = a0;
+        it.subs.forEach((sb, q) => { const ths = th * (sb.w / tw); const ams = s0 + ths / 2; const sl = `${sb.g.label} · ${sb.g.ids.length}`; const sw = sl.length * 7 + 34; const ps = pr + 105 + (q % 2) * 26; const sp: P = { x: Math.cos(ams) * ps, y: Math.sin(ams) * ps, w: sw, g: sb.g, rest: sb.open ? sb.rest : sb.g.ids.length, from: { x: pp.x, y: pp.y } }; pills.push(sp); putNodes(sb.g, sb.vis, sb.open ? sb.rest : 0, s0, ths, Math.max(330, ps + 130)); s0 += ths; });
+      } else { pp.rest = it.rest; putNodes(it.g, it.vis, it.rest, a0, th, Math.max(300, pr + 135)); }
       a0 += th;
     });
     return { nodes, pills };
@@ -129,10 +149,10 @@ export class QuienView implements View {
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9; const pillOf = new Map(pills.map((p) => [p.g.key, p])); const anim = animate && !reduce();
     const curve = (ax: number, ay: number, bx: number, by: number, bend: number) => { const mx = (ax + bx) / 2, my = (ay + by) / 2, dx = bx - ax, dy = by - ay, len = Math.hypot(dx, dy) || 1; return `M${ax.toFixed(1)} ${ay.toFixed(1)} Q${(mx - (dy / len) * len * bend).toFixed(1)} ${(my + (dx / len) * len * bend).toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`; };
     nodes.forEach((n, k) => { x0 = Math.min(x0, n.x - n.r - 44); x1 = Math.max(x1, n.x + n.r + 44); y0 = Math.min(y0, n.y - n.r - 26); y1 = Math.max(y1, n.y + n.r + 54); if (n.g) { const p = pillOf.get(n.g.key)!; const d = relStyle(n.g.rel).d; el('path', { d: curve(p.x, p.y, n.x, n.y, 0.08), class: 'q-e', fill: 'none', stroke: n.g.color, 'stroke-width': 1.8, 'stroke-opacity': 0.7, 'stroke-linecap': 'round', pathLength: 1, ...(d ? { 'stroke-dasharray': d } : {}), style: anim ? `animation-delay:${Math.min(450, 180 + k * 14)}ms` : '' }, lg); } });
-    pills.forEach((p, k) => el('path', { d: curve(0, 0, p.x, p.y, 0.1), class: 'q-e core', fill: 'none', stroke: p.g.color, 'stroke-width': 4, 'stroke-opacity': 0.85, 'stroke-linecap': 'round', pathLength: 1, style: anim ? `animation-delay:${60 + k * 40}ms` : '' }, lg));
+    pills.forEach((p, k) => el('path', { d: curve(p.from?.x ?? 0, p.from?.y ?? 0, p.x, p.y, 0.1), class: p.from ? 'q-e' : 'q-e core', fill: 'none', stroke: p.g.color, 'stroke-width': p.from ? 2.6 : 4, 'stroke-opacity': 0.85, 'stroke-linecap': 'round', pathLength: 1, style: anim ? `animation-delay:${60 + k * 40}ms` : '' }, lg));
     this.bbox = { x0, y0, x1, y1 };
     const ICON: Record<string, string> = { miembro_de: '⚑', capitan_de: '♛', dirige: '♛', dirigido_por: '♛', familiar_de: '♥', progenitor_de: '♥', progenitor_adoptivo_de: '♥', hermano_de: '♥', hermano_adoptivo_de: '♥', abuelo_de: '♥', tio_de: '♥', conyuge_de: '♥', usa_barco: '⚓', come: '◆', combatiente_en: '⚔', originario_de: '⌖', reside_en: '⌖', base_en: '⌖', en_region: '⌖', parte_de: '▣', evoluciona_en: '↻', menciona: '✎' };
-    for (const p of pills) { const ic = ICON[p.g.rel] ?? '★'; const label = `${ic} ${p.g.label} · ${p.g.ids.length}`; const g = el('g', { class: `q-pill ${p.rest > 0 ? 'has-more' : ''}`, transform: `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`, style: `--c:${p.g.color}`, ...(p.rest > 0 ? { 'data-more': p.g.key, tabindex: 0, role: 'button', 'aria-label': `${p.g.label}: ${p.g.ids.length} fichas. Pulsa para ver más` } : {}) }, pg); el('rect', { x: -p.w / 2, y: -15, width: p.w, height: 30, rx: 15 }, g); const t = el('text', { y: 5, 'text-anchor': 'middle' }, g); t.textContent = label; const tt = el('title', {}, g); tt.textContent = `${p.g.label}: ${p.g.ids.length}`; }
+    for (const p of pills) { const ic = ICON[p.g.rel] ?? '★'; const label = `${ic} ${p.g.label} · ${p.g.ids.length}`; const g = el('g', { class: `q-pill ${p.rest > 0 ? 'has-more' : ''} ${p.from ? 'sub' : ''}`, transform: `translate(${p.x.toFixed(1)} ${p.y.toFixed(1)})`, style: `--c:${p.g.color}`, ...(p.rest > 0 ? { 'data-more': p.g.key, tabindex: 0, role: 'button', 'aria-label': `${p.g.label}: ${p.g.ids.length} fichas. Pulsa para ver más` } : {}) }, pg); el('rect', { x: -p.w / 2, y: -15, width: p.w, height: 30, rx: 15 }, g); const t = el('text', { y: 5, 'text-anchor': 'middle' }, g); t.textContent = label; const tt = el('title', {}, g); tt.textContent = `${p.g.label}: ${p.g.ids.length}`; }
     const wrap = (s: string, n: number): string[] => { const w = s.split(/\s+/); const out: string[] = []; let cur = ''; for (const x of w) { if ((cur + ' ' + x).trim().length > n && cur) { out.push(cur); cur = x; } else cur = (cur + ' ' + x).trim(); } if (cur) out.push(cur); return out.length > 3 ? [out[0]!, out[1]!, ex(out.slice(2).join(' '), n * 2)] : out; };
     nodes.forEach((n, k) => {
       const delay = anim ? `animation-delay:${Math.min(500, 120 + k * 16)}ms;` : '';
@@ -149,9 +169,10 @@ export class QuienView implements View {
     const hint = this.stage.querySelector('#q-hint') as HTMLElement | null; if (hint && fromOther) hint.classList.add('off'); else if (hint) window.setTimeout(() => hint.classList.add('off'), 7000);
   }
   private renderLegend() {
-    const lg = this.stage.querySelector('#q-legend') as HTMLElement; const on = this.groups.filter((g) => !g.hidden).length;
-    lg.innerHTML = this.groups.map((g) => `<button class="q-lg ${g.hidden ? 'off' : ''}" data-g="${esc(g.key)}" role="switch" aria-checked="${!g.hidden}" style="--c:${g.color}"><span class="chk" aria-hidden="true">${g.hidden ? '' : '✓'}</span>${esc(g.label)} <b>${fmtN(g.ids.length)}</b></button>`).join('') || '<span class="hint">Esta ficha no tiene relaciones registradas.</span>';
-    (this.stage.querySelector('#q-fn') as HTMLElement).textContent = this.groups.length ? `${on} de ${this.groups.length} activas${on < this.groups.length ? ` · ${this.groups.length - on} ocultas` : ''}` : 'sin relaciones'; (this.stage.querySelector('#q-filt') as HTMLElement).hidden = !this.groups.length;
+    const lg = this.stage.querySelector('#q-legend') as HTMLElement; const chip = (g: Group, sub = false) => `<button class="q-lg ${sub ? 'sub' : ''} ${g.hidden ? 'off' : ''}" data-g="${esc(g.key)}" role="switch" aria-checked="${!g.hidden}" style="--c:${g.color}"><span class="chk" aria-hidden="true">${g.hidden ? '' : '✓'}</span>${esc(g.label)} <b>${fmtN(g.ids.length)}</b></button>`;
+    const leaves = this.groups.flatMap((g) => (g.subs ? [g, ...g.subs] : [g])); const on = leaves.filter((g) => !g.hidden).length;
+    lg.innerHTML = this.groups.map((g) => (g.subs ? `<span class="q-famgrp" role="group" aria-label="Familia y sus parentescos">${chip(g)}<span class="q-subs">${g.subs.map((s) => chip(s, true)).join('')}</span></span>` : chip(g))).join('') || '<span class="hint">Esta ficha no tiene relaciones registradas.</span>';
+    (this.stage.querySelector('#q-fn') as HTMLElement).textContent = leaves.length ? `${on} de ${leaves.length} activas${on < leaves.length ? ` · ${leaves.length - on} ocultas` : ''}` : 'sin relaciones'; (this.stage.querySelector('#q-filt') as HTMLElement).hidden = !this.groups.length;
     if (!this.groups.length) this.svg.setAttribute('aria-label', 'Esta ficha no tiene relaciones registradas en la wiki.');
   }
   private fit(animate: boolean) {
@@ -161,7 +182,7 @@ export class QuienView implements View {
   }
   private renderList() {
     const l = this.stage.querySelector('#q-list') as HTMLElement;
-    l.innerHTML = `<div class="page"><h3 class="sr-title">Relaciones de ${esc(nameOf(this.center))}</h3>${this.groups.map((g) => { const cap = this.shown.get(g.key) ?? 1e9; return `<details class="pl-sea" ${g.weak ? '' : 'open'}><summary><i class="dot" style="background:${g.color}"></i>${esc(g.label)} <b>${fmtN(g.ids.length)}</b></summary><ul>${g.ids.slice(0, Math.max(cap, 60)).map((j) => `<li><a class="ilink" href="#/quien/${encodeURIComponent(nameOf(j))}" data-i="${j}">${avatarHtml(j, 26)} ${esc(nameOf(j))}</a><small>${esc(TYPE_LABEL[typeOf(j)] ?? '')}</small></li>`).join('')}${g.ids.length > Math.max(cap, 60) ? `<li><button class="linkish" data-more="${esc(g.key)}">Ver más (${g.ids.length - Math.max(cap, 60)})</button></li>` : ''}</ul></details>`; }).join('') || '<p class="hint">Esta ficha no tiene relaciones registradas.</p>'}</div>`;
+    l.innerHTML = `<div class="page"><h3 class="sr-title">Relaciones de ${esc(nameOf(this.center))}</h3>${this.groups.map((g) => { const cap = this.shown.get(g.key) ?? 1e9; if (g.subs) return `<details class="pl-sea" open><summary><i class="dot" style="background:${g.color}"></i>Familia <b>${fmtN(g.ids.length)}</b></summary>${g.subs.map((s) => `<h4 class="rel-sub">${esc(s.label)} <b>${s.ids.length}</b></h4><ul>${s.ids.map((j) => `<li><a class="ilink" href="#/quien/${encodeURIComponent(nameOf(j))}" data-i="${j}">${avatarHtml(j, 26)} ${esc(nameOf(j))}</a><small>${esc(TYPE_LABEL[typeOf(j)] ?? '')}</small></li>`).join('')}</ul>`).join('')}</details>`; return `<details class="pl-sea" ${g.weak ? '' : 'open'}><summary><i class="dot" style="background:${g.color}"></i>${esc(g.label)} <b>${fmtN(g.ids.length)}</b></summary><ul>${g.ids.slice(0, Math.max(cap, 60)).map((j) => `<li><a class="ilink" href="#/quien/${encodeURIComponent(nameOf(j))}" data-i="${j}">${avatarHtml(j, 26)} ${esc(nameOf(j))}</a><small>${esc(TYPE_LABEL[typeOf(j)] ?? '')}</small></li>`).join('')}${g.ids.length > Math.max(cap, 60) ? `<li><button class="linkish" data-more="${esc(g.key)}">Ver más (${g.ids.length - Math.max(cap, 60)})</button></li>` : ''}</ul></details>`; }).join('') || '<p class="hint">Esta ficha no tiene relaciones registradas.</p>'}</div>`;
   }
 
   // ---------- camino más corto entre dos fichas ----------

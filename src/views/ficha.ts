@@ -2,7 +2,7 @@
 import { IMGS, TYPE_COLOR, TYPE_LABEL, TYPE_PLURAL, Article, Detail, ensureImgs, ensureIndex, esc, findByTitle, getArticle, getDetail, imgUrl, isFace, valueHtml, epithetOf, typeIcon, loadData, nameOf, richText, rootOf, shapeIcon, typeOf, fmtN, impOf } from '../data';
 import { go, parseHash, setParams } from '../nav';
 import { buildGalleries, dropBroken, galleryTables } from '../gallery';
-import { itemHtml, relationGroups, keyData } from '../panel';
+import { blockHtml, itemHtml, relationBlocks, keyData } from '../panel';
 import type { View } from './view';
 
 interface Chap { ch: number[]; sg: { n: string; a: number; b: number }[] }
@@ -70,7 +70,7 @@ export class FichaView implements View {
     const infobox = (art?.x?.length ? art.x : d.ib).filter((r) => r[1]);
     const rows = keyData({ ib: infobox as Detail['ib'] }, 14); const keys = new Set(rows.map((r) => r[0]));
     const kvAll = [...rows, ...infobox.filter((r) => !/^(nombrejap|nombrerom|nesp|nlat|vol|cap|epi|primera|actor|liveaction|ant|sig)/i.test(r[2]) && !keys.has(r[0].replace(/:$/, ''))).map((r) => [r[0].replace(/:$/, ''), r[1]] as [string, string])].slice(0, 28);
-    const groups = relationGroups(d, i); const mb = [...new Set(d.mb.map(rootOf))].sort((a, b) => impOf(b) - impOf(a)).slice(0, 60);
+    const groups = relationBlocks(d, i); const mb = [...new Set(d.mb.map(rootOf))].sort((a, b) => impOf(b) - impOf(a)).slice(0, 60);
     const toc0 = (art?.t ?? []).filter((t) => t[1] <= 3); const g0 = toc0.findIndex((t) => t[1] === 2 && /^Galer[ií]a$/.test(t[2])); let toc = toc0; if (g0 >= 0) { let g1 = g0 + 1; while (g1 < toc0.length && toc0[g1]![1] > 2) g1++; toc = [...toc0.slice(0, g0), ...toc0.slice(g1), ...toc0.slice(g0, g1)]; }
     const tocHtml = toc.length ? `<ol>${toc.map((t) => `<li class="l${t[1]}"><a href="#/ficha/${encodeURIComponent(name)}?s=${t[0]}" data-sec="${t[0]}">${esc(t[2])}</a></li>`).join('')}</ol>` : '<p class="hint">Esta ficha no tiene secciones.</p>';
     this.root.innerHTML = `<article class="ficha"><div class="page wide">
@@ -85,7 +85,7 @@ export class FichaView implements View {
         <div class="f-main article" id="f-main">${art?.h ? render(art.h) : '<p class="hint">La wiki no tiene artículo para esta ficha.</p>'}</div>
         <aside class="f-side" aria-label="Datos de la ficha">
           ${kvAll.length ? `<section class="card-s"><h2>Datos clave</h2><dl class="kv">${kvAll.map(([a, b]) => `<dt>${esc(a)}</dt><dd>${valueHtml(b)}</dd>`).join('')}</dl></section>` : ''}
-          ${groups.length ? `<section class="card-s"><h2>Relaciones</h2>${groups.map((g, n) => `<details class="rel" ${n < 2 ? 'open' : ''}><summary>${esc(g.label)} <b>${g.ids.length}</b></summary><ul>${g.ids.map((j, x) => itemHtml(j, x >= 8 ? 'hid' : '')).join('')}</ul>${g.ids.length > 8 ? `<button class="more" data-more>Ver las ${g.ids.length - 8} restantes</button>` : ''}</details>`).join('')}</section>` : ''}
+          ${groups.length ? `<section class="card-s"><h2>Relaciones</h2>${groups.map((g, n) => blockHtml(g, n < 2, 8)).join('')}</section>` : ''}
           ${mb.length ? `<section class="card-s"><details class="rel"><summary><h2 class="inl">Mencionado por <b>${fmtN(d.mb.length)}</b></h2></summary><ul>${mb.map((j) => itemHtml(j)).join('')}</ul></details></section>` : ''}
           <section class="card-s src"><h2>Fuente y licencia</h2><p>Artículo de <a href="${esc(d.url)}" target="_blank" rel="noopener">One Piece Wiki en español (Fandom)</a>, © sus colaboradores, bajo licencia <a href="https://creativecommons.org/licenses/by-sa/3.0/" target="_blank" rel="noopener">CC BY-SA 3.0</a>. Puedes ver <a href="${esc(d.url)}?action=history" target="_blank" rel="noopener">el historial de autores</a> en Fandom. Las imágenes pertenecen a sus titulares.</p><p class="conf" title="${esc(d.why)}">Tipo asignado automáticamente · confianza ${Math.round(d.conf * 100)} %</p></section>
         </aside></div></div></article>`;

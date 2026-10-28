@@ -47,8 +47,24 @@ export function relationGroups(d: Detail, self = -1): { key: string; label: stri
   return [...groups.keys()].sort((a, b) => order(a) - order(b)).map((k) => { const [rel, dir] = k.split('|'); return { key: k, rel: rel!, dir: +dir!, label: '', ids: [...new Set(groups.get(k)!)].sort((a, b) => impOf(b) - impOf(a)) }; }).map((g) => ({ ...g, label: relLabel(g.rel, g.dir, self, g.ids.length, g.ids) }));
 }
 export const itemHtml = (j: number, cls = '') => `<li class="${cls}"><a class="ilink item" href="#/ficha/${encodeURIComponent(nameOf(j))}" data-i="${j}">${avatarHtml(j, 30)}<span class="nm">${esc(shownName(j))}</span><small>${esc(TYPE_LABEL[typeOf(j)] ?? '')}</small></a></li>`;
+// «Familia» es una categoría con subcategorías por parentesco (Padres, Hermanos, Abuelos…): se muestra como un bloque con subencabezados
+export const KIN_RELS = ['progenitor_de', 'progenitor_adoptivo_de', 'hermano_de', 'hermano_adoptivo_de', 'conyuge_de', 'abuelo_de', 'tio_de', 'familiar_de'];
+const KIN_ORDER = (g: { rel: string; dir: number }) => KIN_RELS.indexOf(g.rel) * 2 + (g.rel === 'progenitor_de' || g.rel === 'progenitor_adoptivo_de' ? (g.dir === 1 ? 0 : 1) - 10 : g.dir);
+export interface RelBlock { key: string; label: string; ids: number[]; rel: string; dir: number; subs?: RelBlock[] }
+export const kinSubLabel = (g: { rel: string; label: string }) => (g.rel === 'familiar_de' ? 'Otros familiares' : g.label);
+export function relationBlocks(d: Detail, self = -1): RelBlock[] {
+  const gs = relationGroups(d, self) as RelBlock[]; const kin = gs.filter((g) => KIN_RELS.includes(g.rel)); if (!kin.length) return gs;
+  if (kin.length === 1 && kin[0]!.rel === 'familiar_de') return gs.map((g) => (g === kin[0] ? { ...g, label: 'Familia' } : g));
+  const parent: RelBlock = { key: 'familia', label: 'Familia', rel: 'familiar_de', dir: 0, ids: [...new Set(kin.flatMap((g) => g.ids))], subs: [...kin].sort((a, b) => KIN_ORDER(a) - KIN_ORDER(b)) };
+  const out: RelBlock[] = []; let put = false; for (const g of gs) { if (KIN_RELS.includes(g.rel)) { if (!put) { out.push(parent); put = true; } } else out.push(g); } return out;
+}
+export function blockHtml(g: RelBlock, open: boolean, lim: number): string {
+  const list = (ids: number[]) => `<ul>${ids.map((j, x) => itemHtml(j, x >= lim ? 'hid' : '')).join('')}</ul>${ids.length > lim ? `<button class="more" data-more>Ver las ${ids.length - lim} restantes</button>` : ''}`;
+  if (g.subs) return `<details class="rel fam" ${open ? 'open' : ''}><summary>${esc(g.label)} <b>${g.ids.length}</b></summary>${g.subs.map((s) => `<h4 class="rel-sub">${esc(kinSubLabel(s))} <b>${s.ids.length}</b></h4>${list(s.ids)}`).join('')}</details>`;
+  return `<details class="rel" ${open ? 'open' : ''}><summary>${esc(g.label)} <b>${g.ids.length}</b></summary>${list(g.ids)}</details>`;
+}
 function relations(d: Detail, self = -1): string {
-  return relationGroups(d, self).map((g, n) => `<details class="rel" ${n < 3 ? 'open' : ''}><summary>${esc(g.label)} <b>${g.ids.length}</b></summary><ul>${g.ids.map((j, x) => itemHtml(j, x >= 12 ? 'hid' : '')).join('')}</ul>${g.ids.length > 12 ? `<button class="more" data-more>Ver las ${g.ids.length - 12} restantes</button>` : ''}</details>`).join('');
+  return relationBlocks(d, self).map((g, n) => blockHtml(g, n < 3, 12)).join('');
 }
 
 export async function showFicha(i0: number, opts: { canExpand: boolean }) {
