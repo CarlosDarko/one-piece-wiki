@@ -96,6 +96,15 @@ await p.keyboard.press('Enter'); await sleep(1600); check('Carta: elegir un luga
 await p.click('#v-list'); await sleep(500); check('Mapa: el modo lista accesible muestra los lugares por mar', (await p.$$eval('.pl-sea', (a) => a.length)) >= 3 && (await p.$$eval('.pl-sea li', (a) => a.length)) > 100);
 await p.close();
 
+// ---------- leyenda de la carta ----------
+{
+  p = await page(1920, 1080); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(900);
+  const lg = await p.evaluate(() => { const l = document.getElementById('c-leg').getBoundingClientRect(); const c = document.querySelector('svg.msvg > g').getBoundingClientRect(); const ix = Math.max(0, Math.min(l.right, c.right) - Math.max(l.left, c.left)), iy = Math.max(0, Math.min(l.bottom, c.bottom) - Math.max(l.top, c.top)); return { abierta: document.getElementById('c-leg').open, entradas: document.querySelectorAll('#c-leg li').length, solape: Math.round(ix * iy), sagas: document.querySelectorAll('#c-sagas .c-sg').length }; });
+  check('Carta: leyenda con trazos, paradas/colores de saga e iconos, abierta sin tapar la carta en pantalla ancha', lg.abierta && lg.entradas >= 8 && lg.solape === 0 && lg.sagas >= 10, JSON.stringify(lg)); await p.close();
+  p = await page(390, 844, true); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(700);
+  const lm = await p.evaluate(() => { const d = document.getElementById('c-leg'); const r = d.getBoundingClientRect(); return { cerrada: !d.open, w: Math.round(r.width), h: Math.round(r.height) }; });
+  check('Carta (móvil): la leyenda empieza plegada y compacta, y se despliega al tocarla', lm.cerrada && lm.w <= 170 && lm.h <= 60 && (await (async () => { await p.click('#c-leg > summary'); await sleep(300); return p.$eval('#c-leg', (e) => e.open && e.getBoundingClientRect().height > 120); })()), JSON.stringify(lm)); await p.close();
+}
 // ---------- biblioteca ----------
 p = await page(); await goto(p, '#/biblioteca'); await p.waitForSelector('.lib-card'); await sleep(900);
 check('Biblioteca: sin paginación (no hay «Página n de m»)', (await p.$$eval('.pager, [data-page]', (a) => a.length)) === 0 && !(await p.$eval('.lib', (e) => /Página \d+ de/.test(e.textContent))));
@@ -303,6 +312,19 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
   await goto(p, '#/ficha/' + ficha('God Valley')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(1200);
   const sp = await p.evaluate(() => { const e = document.querySelector('.spoiler'); if (!e) return null; const cs = getComputedStyle(e); const lum = (c) => { const m = c.match(/\d+/g).map(Number); const f = m.slice(0, 3).map((v) => { v /= 255; return v <= 0.03928 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4; }); return 0.2126 * f[0] + 0.7152 * f[1] + 0.0722 * f[2]; }; const a = lum(cs.color), b = lum(cs.backgroundColor); return { visible: e.offsetHeight > 20, ratio: (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05) }; });
   check('Spoilers: el aviso existe, es visible y cumple contraste AA', !!sp && sp.visible && sp.ratio >= 4.5, JSON.stringify(sp)); await p.close();
+}
+// ---------- enlaces del contenido: internos válidos, externos solo con marca ----------
+{
+  p = await page(); const bad = [];
+  for (const n of ['Fruta Gomu Gomu', 'Monkey D. Luffy', 'Roronoa Zoro', 'Marineford', 'Thousand Sunny', 'Arco del País de Wano', 'Edward Newgate', 'Boa Hancock']) {
+    await goto(p, '#/ficha/' + ficha(n)); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(400);
+    const r = await p.evaluate(() => { const as = [...document.querySelectorAll('.article a')]; const wiki = as.filter((a) => /wikipedia.org/.test(a.getAttribute('href') ?? '')).length; const sinMarca = as.filter((a) => a.getAttribute('href') && !a.classList.contains('ilink') && !(a.classList.contains('ext') && a.target === '_blank' && /noopener/.test(a.rel))).length; const rotos = as.filter((a) => a.classList.contains('ilink') && !a.dataset.i).length; return { wiki, sinMarca, rotos }; });
+    if (r.wiki || r.sinMarca || r.rotos) bad.push(n + ':' + JSON.stringify(r));
+  }
+  check('Enlaces: ningún enlace a Wikipedia, ni externo sin marca (↗, nueva pestaña, noopener), ni interno roto (8 fichas)', bad.length === 0, bad.join(' · '));
+  await goto(p, '#/ficha/' + ficha('Fruta Gomu Gomu')); await p.waitForSelector('.article', { timeout: 30000 }); await sleep(400);
+  const yub = await p.evaluate(() => { const txt = document.querySelector('.article').textContent; const a = [...document.querySelectorAll('.article a')].find((x) => /Yubari/i.test(x.textContent)); return { esta: /Yubari/.test(txt), enlace: a ? a.getAttribute('href') : null }; });
+  check('«melón Yubari» es texto normal (no enlaza a Wikipedia)', yub.esta && !(yub.enlace ?? '').includes('wikipedia'), JSON.stringify(yub)); await p.close();
 }
 // ---------- regresión de agrupaciones y relaciones ----------
 {

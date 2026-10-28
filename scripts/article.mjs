@@ -37,7 +37,20 @@ export function sanitizeArticle($) {
       if (href.startsWith('/es/wiki/') && !/^\/es\/wiki\/(Archivo|Categor[ií]a|Especial|Ayuda|Plantilla|Usuario|File|Category|Special|Template|User|Blog|M[oó]dulo)[:_]/i.test(href) && !href.includes(':')) {
         const t = norm(href.slice(9).split('#')[0]).replace(/_/g, ' '); return t ? `<a data-t="${escAttr(t)}">${inner}</a>` : inner;
       }
-      if (/^https?:\/\//i.test(href) && !/fandom\.com\/(f|signin|register)|wikia\.com\/(signin|register)/i.test(href)) return `<a href="${escAttr(href)}" target="_blank" rel="noopener nofollow">${inner}</a>`;
+      if (/^https?:\/\//i.test(href)) {
+        let u; try { u = new URL(href); } catch { return inner; }
+        const host = u.hostname.replace(/^www\./, ''), plain = $(n).text().replace(/\s+/g, ' ').trim();
+        const NS = /^(Archivo|Categor[ií]a|Especial|Ayuda|Plantilla|Usuario|File|Category|Special|Template|User|Blog|M[oó]dulo)[:_]/i;
+        // la propia wiki con URL absoluta (fandom o el dominio antiguo de wikia) → ficha interna
+        if (/^(onepiece\.fandom\.com|es\.onepiece\.wikia\.com|onepiece\.wikia\.com)$/.test(host)) { const m = u.pathname.match(/^\/(?:es\/)?wiki\/(.+)$/); if (m && !NS.test(m[1]) && !m[1].includes(':')) { const t = norm(m[1]).replace(/_/g, ' '); return t ? `<a data-t="${escAttr(t)}">${inner}</a>` : inner; } return inner; }
+        // el «?» tras los textos japoneses (ayuda del idioma): ruido
+        if (/wikipedia\.org$/.test(host) && /Ayuda:Idioma/i.test(u.pathname)) return '';
+        // Wikipedia y otras wikis: enlace «blando» por el texto; si existe una ficha equivalente se enlaza, si no queda como texto normal
+        if (/(wikipedia|wiktionary)\.org$/.test(host) || /\.(fandom|wikia)\.com$/.test(host)) return plain.length >= 2 && plain.length <= 80 ? `<a data-t="${escAttr(plain)}">${inner}</a>` : inner;
+        // fuentes y referencias que sí tienen sentido como enlace externo
+        if (/(imdb\.com|eldoblaje\.com|bandai|toei-animation|shueisha|viz\.com|crunchyroll|netflix\.com|funimation|animenewsnetwork|myanimelist|youtube\.com|youtu\.be|twitter\.com|x\.com|mangaplus|planetacomic|panini)/i.test(host)) return `<a class="ext" href="${escAttr(href)}" target="_blank" rel="noopener noreferrer nofollow">${inner}</a>`;
+        return inner;
+      }
       return inner;
     }
     if (/^h[2-5]$/.test(name)) {
