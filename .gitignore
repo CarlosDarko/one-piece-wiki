@@ -1,6 +1,6 @@
 node_modules
 dist
-capturas
+/capturas
 data/pages
 data/cache
 data/raw
