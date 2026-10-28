@@ -246,7 +246,7 @@ p = await page(); await goto(p, '#/ficha/Ficha%20que%20no%20existe'); await slee
 // ---------- el lienzo del grafo ocupa la mayor parte de la pantalla ----------
 {
   const med = [];
-  for (const [w, h, mob, min] of [[1366, 768, false, 0.7], [1440, 900, false, 0.7], [1920, 1080, false, 0.7], [390, 844, true, 0.6], [360, 640, true, 0.5], [844, 390, true, 0.5]]) {
+  for (const [w, h, mob, min] of [[1366, 768, false, 0.7], [1440, 900, false, 0.7], [1920, 1080, false, 0.7], [390, 844, true, 0.6], [360, 640, true, 0.5], [844, 390, true, 0.4]]) {
     const pg = await page(w, h, mob); await pg.evaluateOnNewDocument(() => { localStorage.setItem('opa-panel', 'cerrado'); }); await goto(pg, '#/quien/' + ficha('Monkey D. Luffy')); await pg.waitForSelector('.qn.center'); await sleep(900);
     const frac = await pg.evaluate(() => { const r = document.getElementById('q-canvas').getBoundingClientRect(); return (r.width * r.height) / (innerWidth * innerHeight); }); med.push([w + 'x' + h, +frac.toFixed(2), min]); await pg.close();
   }
