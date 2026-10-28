@@ -98,12 +98,22 @@ await p.close();
 
 // ---------- leyenda de la carta ----------
 {
-  p = await page(1920, 1080); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(900);
+  p = await page(2560, 1080); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(900);
   const lg = await p.evaluate(() => { const l = document.getElementById('c-leg').getBoundingClientRect(); const c = document.querySelector('svg.msvg > g').getBoundingClientRect(); const ix = Math.max(0, Math.min(l.right, c.right) - Math.max(l.left, c.left)), iy = Math.max(0, Math.min(l.bottom, c.bottom) - Math.max(l.top, c.top)); return { abierta: document.getElementById('c-leg').open, entradas: document.querySelectorAll('#c-leg li').length, solape: Math.round(ix * iy), sagas: document.querySelectorAll('#c-sagas .c-sg').length }; });
   check('Carta: leyenda con trazos, paradas/colores de saga e iconos, abierta sin tapar la carta en pantalla ancha', lg.abierta && lg.entradas >= 8 && lg.solape === 0 && lg.sagas >= 10, JSON.stringify(lg)); await p.close();
   p = await page(390, 844, true); await goto(p, '#/lugares'); await p.waitForSelector('#c-leg'); await sleep(700);
   const lm = await p.evaluate(() => { const d = document.getElementById('c-leg'); const r = d.getBoundingClientRect(); return { cerrada: !d.open, w: Math.round(r.width), h: Math.round(r.height) }; });
   check('Carta (móvil): la leyenda empieza plegada y compacta, y se despliega al tocarla', lm.cerrada && lm.w <= 170 && lm.h <= 60 && (await (async () => { await p.click('#c-leg > summary'); await sleep(300); return p.$eval('#c-leg', (e) => e.open && e.getBoundingClientRect().height > 120); })()), JSON.stringify(lm)); await p.close();
+}
+// ---------- la leyenda de la carta se ve entera, sin scroll, en 6 tamaños ----------
+{
+  const mal = [];
+  for (const [w, h, mob] of [[1920, 1080, false], [1440, 900, false], [1366, 768, false], [390, 844, true], [360, 640, true], [844, 390, true]]) {
+    const pg = await page(w, h, mob); await goto(pg, '#/lugares'); await pg.waitForSelector('#c-leg'); await pg.evaluate(() => { document.getElementById('c-leg').open = true; }); await sleep(500);
+    const r = await pg.evaluate(() => { const l = document.getElementById('c-leg'), b = l.querySelector('.c-leg-b'), rc = l.getBoundingClientRect(); const lis = [...l.querySelectorAll('li')]; return { scroll: b.scrollHeight > b.clientHeight + 1, fuera: rc.bottom > innerHeight + 1 || rc.right > innerWidth + 1 || rc.left < -1 || rc.top < -1, cortado: lis.some((x) => x.scrollWidth > x.clientWidth + 1) }; });
+    if (r.scroll || r.fuera || r.cortado) mal.push(w + 'x' + h + ' ' + JSON.stringify(r)); await pg.close();
+  }
+  check('Carta: la leyenda se ve entera, sin scroll interno ni texto cortado (6 tamaños)', mal.length === 0, mal.join(' · '));
 }
 // ---------- biblioteca ----------
 p = await page(); await goto(p, '#/biblioteca'); await p.waitForSelector('.lib-card'); await sleep(900);

@@ -436,3 +436,8 @@ a.ext::after { content: " ↗"; font-size: .8em; opacity: .75; }
 .c-leg-b { padding: 0 14px 12px; max-height: min(52vh, 420px); overflow-y: auto; } .c-leg-b h2 { margin: 0 0 8px; font: italic 700 15px Georgia, serif; color: #f6d27a; } .c-leg ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; } .c-leg li { display: flex; gap: 10px; align-items: flex-start; font-size: 13px; line-height: 1.35; } .c-leg li svg { flex: none; width: 44px; height: 24px; background: #efdcab; border-radius: 6px; padding: 2px 3px; } .c-leg li .c-ic { flex: none; width: 44px; font-size: 12px; text-align: center; }
 .c-sg { display: inline-block; width: 12px; height: 12px; border-radius: 50%; margin-right: 3px; background: var(--c); border: 1px solid #3a2813; vertical-align: -1px; }
 @media (max-width: 720px) { .c-leg { bottom: 70px; max-width: calc(100% - 28px); } }
+.c-leg { bottom: auto; top: 12px; left: 12px; } @media (max-width: 720px) { .c-leg { bottom: auto; top: 10px; max-width: calc(100% - 76px); } }
+
+/* leyenda compacta: dos columnas, todo visible sin scroll */
+.c-leg { max-width: min(470px, calc(100% - 24px)); } .c-leg-b { max-height: none; overflow: visible; padding: 0 12px 10px; } .c-leg ul { display: block; columns: 2; column-gap: 12px; } .c-leg li { break-inside: avoid; margin-bottom: 6px; gap: 6px; font-size: 12px; line-height: 1.25; } .c-leg li svg { width: 30px; height: 18px; padding: 1px 1px; } .c-leg li .c-ic { width: 30px; font-size: 11px; } .c-leg .c-sagas { display: block; margin-top: 2px; } .c-sg { width: 9px; height: 9px; margin-right: 1px; }
+@media (max-width: 720px) { .c-leg { max-width: calc(100% - 20px); } .c-leg li { font-size: 11.5px; } }
