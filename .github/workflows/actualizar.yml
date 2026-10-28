@@ -1,0 +1,57 @@
+# Actualización automática semanal: detecta cambios en la wiki (API, ≤1 petición/s, User-Agent neutro), reconstruye,
+# pasa las pruebas de humo con Chrome y publica en GitHub Pages SOLO si pasan.
+# Vive en la rama por defecto (main, que sirve Pages) y trabaja sobre la rama "fuente" (código + estado pequeño).
+# La caché de fichas (~130 MB) se guarda en la caché PRIVADA de Actions (no se publica en ningún sitio). Si no existe
+# (primera vez o caducada tras 7 días sin uso), se vuelve a rastrear entera por la API (≈2 h a 1 petición/s).
+# Comprobado con probar-api.yml: la API de la wiki responde con normalidad desde los runners.
+# Desactivar: Actions → «Actualizar el atlas» → «···» → Disable workflow.
+name: Actualizar el atlas
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 7 * * 1'   # cada lunes a las 07:00 UTC
+permissions:
+  contents: write
+concurrency: { group: actualizar, cancel-in-progress: false }
+env:
+  MAX_ESPERA_TOTAL_MS: '600000'      # si la API bloquea, no esperar horas: falla a los 10 min con un mensaje claro
+  BROWSER: /usr/bin/google-chrome
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 340
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: fuente }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Caché de fichas (privada de Actions)
+        uses: actions/cache@v4
+        with:
+          path: data/pages
+          key: pages-${{ github.run_id }}
+          restore-keys: pages-
+      - name: Rastreo completo si no hay caché
+        run: |
+          mkdir -p data/pages
+          n=$(ls data/pages | wc -l); echo "Fichas en caché: $n"
+          if [ "$n" -lt 7000 ]; then echo "Sin caché: rastreo completo por la API (1 petición/s)"; MAX_ESPERA_TOTAL_MS=7200000 node scripts/supervisor.mjs; fi
+      - name: Detectar cambios, descargar lo nuevo y reconstruir
+        run: node scripts/actualizar.mjs --sin-publicar --forzar
+      - name: Pruebas de humo con Chrome
+        run: node scripts/prueba-humo.mjs
+      - name: Guardar el estado de la sincronización en la rama fuente
+        run: |
+          git config user.name "atlas-bot"; git config user.email "atlas-bot@users.noreply.github.com"
+          git add data/sync.json data/novedades.json data/revs.json data/redirects.json data/catparents.json data/ultima-actualizacion.json || true
+          git diff --cached --quiet || { git commit -m "Estado de la sincronización"; git push origin fuente; }
+      - name: Publicar en main (GitHub Pages) solo si las pruebas pasaron
+        run: |
+          rm -rf /tmp/sitio && git clone --depth 1 --branch main "https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }}.git" /tmp/sitio
+          find /tmp/sitio -mindepth 1 -maxdepth 1 ! -name .git ! -name .github -exec rm -rf {} +
+          cp -r dist/. /tmp/sitio/ && touch /tmp/sitio/.nojekyll
+          cp actions/README-sitio.md /tmp/sitio/README.md
+          cd /tmp/sitio && git config user.name "atlas-bot" && git config user.email "atlas-bot@users.noreply.github.com"
+          git add -A && { git diff --cached --quiet && echo "Sin cambios que publicar" || { git commit -m "Actualización automática $(date -u +%F)"; git push origin main; }; }
